@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<widget id="com.prithvi.TruckScheduler24Hr"
+        pluginWidget="true"
+        needsEntityContext="false"
+        supportedPlatform="Web"
+        offlineCapable="false"
+        xmlns="http://www.mendix.com/widget/1.0/"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.mendix.com/widget/1.0/ ../node_modules/@mendix/pluggable-widgets-tools/dist/xsd/widget.xsd">
+
+    <name>Truck Scheduler 24Hr</name>
+    <description>24-hour truck scheduling Gantt grid across dynamically-defined loading bays. Supports drag/move/resize, Excel import, and conflict highlighting.</description>
+    <studioProCategory>Logistics</studioProCategory>
+
+    <properties>
+
+        <!-- ═══════════ DATA ═══════════ -->
+        <propertyGroup caption="Data">
+
+            <property key="scheduleData" type="datasource" isList="true" required="true">
+                <caption>Schedule Data</caption>
+                <description>List of schedule objects — one per truck-bay assignment.</description>
+            </property>
+
+            <property key="truckIdAttr" type="attribute" dataSource="scheduleData" required="true">
+                <caption>Truck ID</caption>
+                <description>String attribute identifying the truck (e.g. "TRK-0042").</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                </attributeTypes>
+            </property>
+
+            <property key="bayIdAttr" type="attribute" dataSource="scheduleData" required="true">
+                <caption>Bay ID</caption>
+                <description>String attribute identifying the loading bay (e.g. "A1", "North-12"). Bay rows are derived dynamically — no fixed maximum.</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                    <attributeType name="Enum" />
+                </attributeTypes>
+            </property>
+
+            <property key="startTimeAttr" type="attribute" dataSource="scheduleData" required="true">
+                <caption>Start Time</caption>
+                <description>DateTime attribute for when the truck arrives at the bay.</description>
+                <attributeTypes>
+                    <attributeType name="DateTime" />
+                </attributeTypes>
+            </property>
+
+            <property key="endTimeAttr" type="attribute" dataSource="scheduleData" required="true">
+                <caption>End Time</caption>
+                <description>DateTime attribute for when the truck departs the bay.</description>
+                <attributeTypes>
+                    <attributeType name="DateTime" />
+                </attributeTypes>
+            </property>
+
+            <property key="statusAttr" type="attribute" dataSource="scheduleData" required="false">
+                <caption>Status</caption>
+                <description>Optional status attribute — Scheduled / InProgress / Completed / Conflict.</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                    <attributeType name="Enum" />
+                </attributeTypes>
+            </property>
+
+            <property key="colorAttr" type="attribute" dataSource="scheduleData" required="false">
+                <caption>Color Override</caption>
+                <description>Optional CSS hex color per truck block (e.g. "#E57373"). Overrides status-based coloring.</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                </attributeTypes>
+            </property>
+
+            <property key="displayDate" type="attribute" required="false">
+                <caption>Display Date</caption>
+                <description>DateTime attribute controlling which day's schedule is shown. Defaults to today when empty.</description>
+                <attributeTypes>
+                    <attributeType name="DateTime" />
+                    <attributeType name="String" />
+                </attributeTypes>
+            </property>
+
+        </propertyGroup>
+
+        <!-- ═══════════ ACTIONS ═══════════ -->
+        <propertyGroup caption="Actions">
+
+            <property key="onTruckClick" type="action" dataSource="scheduleData" required="false">
+                <caption>On Truck Block Click</caption>
+                <description>Action triggered when an existing truck block is clicked. The TruckSchedule object is available as $currentObject in the nanoflow.</description>
+            </property>
+
+            <property key="onScheduleChange" type="action" dataSource="scheduleData" required="false">
+                <caption>On Schedule Change (drag / resize)</caption>
+                <description>Action called after a block is moved or resized. Before this fires, window.__TruckSchedulerPendingEdit is populated with {newStartISO, newEndISO}. Wire to a nanoflow that reads these values via a JavaScript Action and commits the updated times.</description>
+            </property>
+
+            <property key="onEmptySlotClick" type="action" required="false">
+                <caption>On Empty Slot Click</caption>
+                <description>Action triggered when the user clicks an empty bay-time slot. window.__TruckSchedulerNewSlot is set to {bayId, startISO, endISO} before firing. Wire to a nanoflow that creates a new TruckSchedule object.</description>
+            </property>
+
+            <property key="onExcelImport" type="action" required="false">
+                <caption>On Excel Import</caption>
+                <description>Action triggered after Excel rows are parsed and validated. window.__TruckSchedulerImportRows contains the parsed array. Wire to a nanoflow / JavaScript Action that creates TruckSchedule objects from the import data.</description>
+            </property>
+
+        </propertyGroup>
+
+        <!-- ═══════════ DISPLAY ═══════════ -->
+        <propertyGroup caption="Display">
+
+            <property key="rowHeight" type="integer" defaultValue="30" required="false">
+                <caption>Row Height (px)</caption>
+                <description>Pixel height of each bay row in the grid. Default 30. Increase for touch devices.</description>
+            </property>
+
+            <property key="showDwellMarkers" type="boolean" defaultValue="true" required="false">
+                <caption>Show 25-Minute Dwell Markers</caption>
+                <description>When enabled, faint vertical lines appear every 25 minutes — matching average dwell time — to help with visual slot estimation.</description>
+            </property>
+
+            <property key="defaultDwellMinutes" type="integer" defaultValue="25" required="false">
+                <caption>Default Dwell Duration (minutes)</caption>
+                <description>Duration used for new truck blocks created by clicking an empty slot. Default 25 minutes.</description>
+            </property>
+
+        </propertyGroup>
+
+    </properties>
+</widget>

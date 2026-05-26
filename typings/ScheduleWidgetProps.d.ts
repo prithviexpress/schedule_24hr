@@ -1,0 +1,57 @@
+/**
+ * This file was generated from ScheduleWidget.xml
+ * WARNING: All changes made to this file will be overwritten
+ * @author Mendix Widgets Framework Team
+ */
+import { CSSProperties } from "react";
+import { ActionValue, EditableValue, ListValue, ListActionValue, ListAttributeValue } from "mendix";
+
+export interface ScheduleWidgetContainerProps {
+    name: string;
+    class: string;
+    style?: CSSProperties;
+    tabIndex?: number;
+    scheduleData: ListValue;
+    truckIdAttr: ListAttributeValue<string>;
+    bayIdAttr: ListAttributeValue<string>;
+    startTimeAttr: ListAttributeValue<Date>;
+    endTimeAttr: ListAttributeValue<Date>;
+    statusAttr?: ListAttributeValue<string>;
+    colorAttr?: ListAttributeValue<string>;
+    displayDate?: EditableValue<Date | string>;
+    onTruckClick?: ListActionValue;
+    onScheduleChange?: ListActionValue;
+    onEmptySlotClick?: ActionValue;
+    onExcelImport?: ActionValue;
+    rowHeight?: number;
+    showDwellMarkers?: boolean;
+    defaultDwellMinutes?: number;
+}
+
+export interface ScheduleWidgetPreviewProps {
+    /**
+     * @deprecated Deprecated since version 9.18.0. Please use class property instead.
+     */
+    className: string;
+    class: string;
+    style: string;
+    styleObject?: CSSProperties;
+    readOnly: boolean;
+    renderMode: "design" | "xray" | "structure";
+    translate: (text: string) => string;
+    scheduleData: {} | { caption: string } | { type: string } | null;
+    truckIdAttr: string;
+    bayIdAttr: string;
+    startTimeAttr: string;
+    endTimeAttr: string;
+    statusAttr: string;
+    colorAttr: string;
+    displayDate: string;
+    onTruckClick: {} | null;
+    onScheduleChange: {} | null;
+    onEmptySlotClick: {} | null;
+    onExcelImport: {} | null;
+    rowHeight: number | null;
+    showDwellMarkers: boolean;
+    defaultDwellMinutes: number | null;
+}

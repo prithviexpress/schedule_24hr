@@ -1,0 +1,9 @@
+{
+    "extends": "@mendix/pluggable-widgets-tools/configs/tsconfig.base.json",
+    "compilerOptions": {
+        "rootDir": ".",
+        "lib": ["ES2020", "DOM"],
+        "strict": true
+    },
+    "include": ["src", "typings"]
+}
