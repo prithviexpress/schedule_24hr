@@ -6,6 +6,7 @@
   "description": "24-hour truck scheduling grid — unlimited trucks across dynamically-defined loading bays",
   "copyright": "2026",
   "license": "Apache-2.0",
+  "type": "module",
   "config": {
     "projectPath": "../MxTestProject/",
     "mendixHost": "http://localhost:8080",
@@ -22,6 +23,8 @@
   },
   "devDependencies": {
     "@mendix/pluggable-widgets-tools": "^11.8.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "typescript": "^5.0.0"
   },
   "peerDependencies": {

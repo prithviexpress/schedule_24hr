@@ -1,23 +1,24 @@
-// Custom rollup config:
+// Custom rollup config following Mendix Studio Pro 11.7+ requirements:
 //
-// 1. Removes the Babel OUTPUT plugin from AMD/ES bundles.
-//    The output plugin's only job is downcompiling to Safari 12, which causes
-//    Babel helpers to land before define() in AMD and before import statements
-//    in ESM, making both formats invalid as module files.
+// 1. ES/mjs build is FULLY BUNDLED (no external imports):
+//    - external: [] overrides the default webExternal list so react, react-dom,
+//      and react/jsx-runtime are bundled directly into the .mjs.
+//    - Studio Pro requires "fully bundled into a single JS file" — the .mjs
+//      cannot have unresolved import paths at validation time.
 //
-// 2. Removes terser from the ES/mjs bundle so the file is not single-line
-//    minified — Studio Pro's static ES module validator can reject minified code.
+// 2. Babel OUTPUT plugin removed (AMD + ES):
+//    Adding Babel helpers before define()/import causes both formats to be
+//    invalid module files. The Babel INPUT plugin still runs for JSX/TS.
 //
-// 3. Removes the Babel INPUT JSX transform override for ES format so that
-//    TypeScript's classic React.createElement output is preserved, eliminating
-//    the react/jsx-runtime import from the mjs (only "react" is imported).
+// 3. Terser removed from ES build:
+//    Minified single-line output can trip Studio Pro's ES module validator.
+//    AMD stays minified for production.
 export default async function (args) {
     const defaults = args.configDefaultConfig;
     if (!defaults) return {};
 
     return defaults.map(config => {
         const format = config.output?.format;
-        // Leave editorPreview (commonjs) and editorConfig builds unchanged
         if (format !== "amd" && format !== "es") return config;
 
         const withoutBabelOutput = (config.plugins || []).filter(p => p?.name !== "babel");
@@ -25,6 +26,8 @@ export default async function (args) {
         if (format === "es") {
             return {
                 ...config,
+                // Bundle everything — no external imports in the .mjs
+                external: [],
                 plugins: withoutBabelOutput.filter(p => p?.name !== "terser")
             };
         }
@@ -32,3 +35,4 @@ export default async function (args) {
         return { ...config, plugins: withoutBabelOutput };
     });
 }
+
