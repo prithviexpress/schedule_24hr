@@ -1,11 +1,16 @@
-// Custom rollup config: removes the Babel output plugin from AMD/ES bundles.
-// The output plugin's only job is downcompiling to Safari 12, which Mendix 11
-// does not support — and which causes Babel helpers to land before define() in
-// AMD and before import statements in ESM, making both formats invalid.
-// The Babel INPUT plugin still runs (TypeScript → JS, JSX transform), so all
-// source transformations happen correctly; we just skip the output downcompile.
-// Terser is also removed from the ES/mjs build — minification wraps everything
-// into a single line which some Studio Pro ES module validators reject.
+// Custom rollup config:
+//
+// 1. Removes the Babel OUTPUT plugin from AMD/ES bundles.
+//    The output plugin's only job is downcompiling to Safari 12, which causes
+//    Babel helpers to land before define() in AMD and before import statements
+//    in ESM, making both formats invalid as module files.
+//
+// 2. Removes terser from the ES/mjs bundle so the file is not single-line
+//    minified — Studio Pro's static ES module validator can reject minified code.
+//
+// 3. Removes the Babel INPUT JSX transform override for ES format so that
+//    TypeScript's classic React.createElement output is preserved, eliminating
+//    the react/jsx-runtime import from the mjs (only "react" is imported).
 export default async function (args) {
     const defaults = args.configDefaultConfig;
     if (!defaults) return {};
@@ -15,17 +20,15 @@ export default async function (args) {
         // Leave editorPreview (commonjs) and editorConfig builds unchanged
         if (format !== "amd" && format !== "es") return config;
 
-        const filtered = (config.plugins || []).filter(p => p?.name !== "babel");
+        const withoutBabelOutput = (config.plugins || []).filter(p => p?.name !== "babel");
 
         if (format === "es") {
-            // Also remove terser for the ES/mjs bundle — minified single-line
-            // output can fail Studio Pro's static ES module validation.
             return {
                 ...config,
-                plugins: filtered.filter(p => p?.name !== "terser")
+                plugins: withoutBabelOutput.filter(p => p?.name !== "terser")
             };
         }
 
-        return { ...config, plugins: filtered };
+        return { ...config, plugins: withoutBabelOutput };
     });
 }

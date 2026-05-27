@@ -1,4 +1,4 @@
-import { ReactElement } from "react";
+import React, { ReactElement } from "react";
 import { ScheduleWidgetPreviewProps } from "../typings/ScheduleWidgetProps";
 
 export function preview(_props: ScheduleWidgetPreviewProps): ReactElement {

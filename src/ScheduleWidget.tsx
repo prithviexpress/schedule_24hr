@@ -1,4 +1,4 @@
-import { ReactElement, useCallback, useMemo, useState } from "react";
+import React, { ReactElement, useCallback, useMemo, useState } from "react";
 import { ObjectItem } from "mendix";
 import { ScheduleWidgetContainerProps } from "../typings/ScheduleWidgetProps";
 import { SchedulerCanvas } from "./components/SchedulerCanvas";
