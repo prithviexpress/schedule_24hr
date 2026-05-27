@@ -1,5 +1,4 @@
 import { ReactElement, useRef, useState, useCallback } from "react";
-import { read, utils } from "xlsx";
 import { ExcelRow } from "./types";
 
 interface ExcelUploadProps {
@@ -22,19 +21,25 @@ export function ExcelUpload({ onConfirmed, onError }: ExcelUploadProps): ReactEl
 
     const parseFile = useCallback(
         (file: File) => {
+            const ext = file.name.split(".").pop()?.toLowerCase();
+            if (ext === "xlsx" || ext === "xls") {
+                onError(
+                    "Please save the file as CSV from Excel first:\n" +
+                    "File → Save As → CSV (Comma delimited) — then re-upload the .csv file."
+                );
+                return;
+            }
             setIsParsing(true);
             const reader = new FileReader();
             reader.onload = e => {
                 try {
-                    const wb = read(e.target?.result as ArrayBuffer, { type: "array", cellDates: true });
-                    const ws = wb.Sheets[wb.SheetNames[0]];
-                    const raw = utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" });
-                    const rows = normalizeRows(raw);
+                    const text = e.target?.result as string;
+                    const rows = parseCsv(text);
                     allRowsRef.current = rows;
                     setTotalRows(rows.length);
                     setPreview(rows.slice(0, 10));
                 } catch (err) {
-                    onError(`Excel parse error: ${(err as Error).message}`);
+                    onError(`CSV parse error: ${(err as Error).message}`);
                 } finally {
                     setIsParsing(false);
                 }
@@ -43,7 +48,7 @@ export function ExcelUpload({ onConfirmed, onError }: ExcelUploadProps): ReactEl
                 onError("Failed to read file");
                 setIsParsing(false);
             };
-            reader.readAsArrayBuffer(file);
+            reader.readAsText(file, "utf-8");
         },
         [onError]
     );
@@ -79,12 +84,12 @@ export function ExcelUpload({ onConfirmed, onError }: ExcelUploadProps): ReactEl
                 role="button"
                 tabIndex={0}
                 onKeyDown={e => e.key === "Enter" && inputRef.current?.click()}
-                aria-label="Upload schedule Excel file — click or drag and drop"
+                aria-label="Upload schedule CSV file — click or drag and drop"
             >
                 <input
                     ref={inputRef}
                     type="file"
-                    accept=".xlsx,.xls,.csv"
+                    accept=".csv,.xlsx,.xls"
                     style={{ display: "none" }}
                     onChange={e => {
                         const f = e.target.files?.[0];
@@ -92,7 +97,7 @@ export function ExcelUpload({ onConfirmed, onError }: ExcelUploadProps): ReactEl
                         e.target.value = "";
                     }}
                 />
-                {isParsing ? "Parsing…" : "⬆ Upload Excel / CSV"}
+                {isParsing ? "Parsing…" : "⬆ Upload CSV / Excel"}
             </div>
 
             {preview && (
@@ -152,24 +157,30 @@ export function ExcelUpload({ onConfirmed, onError }: ExcelUploadProps): ReactEl
     );
 }
 
-// ─── Utilities ─────────────────────────────────────────────────────────────────
+// ─── CSV Parser (RFC 4180 + auto-detect delimiter) ──────────────────────────
 
-function normalizeKey(k: string): string {
-    return k.toLowerCase().replace(/[\s_\-.]/g, "");
-}
+function parseCsv(text: string): PreviewRow[] {
+    const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+    const nonEmpty = lines.filter(l => l.trim());
+    if (nonEmpty.length < 2) throw new Error("File has no data rows");
 
-function normalizeRows(raw: Record<string, unknown>[]): PreviewRow[] {
-    return raw.map((row, i) => {
-        const norm: Record<string, unknown> = {};
-        for (const k of Object.keys(row)) {
-            norm[normalizeKey(k)] = row[k];
-        }
+    // Auto-detect delimiter from header line
+    const header = nonEmpty[0];
+    const delim = header.includes("\t") ? "\t" : header.includes(";") ? ";" : ",";
 
-        const truckId = String(norm["truckid"] ?? norm["truck"] ?? norm["truckno"] ?? "").trim();
-        const bayId = String(norm["bayid"] ?? norm["bay"] ?? norm["bayno"] ?? norm["baynumber"] ?? "").trim();
-        const rawStart = norm["starttime"] ?? norm["start"] ?? norm["arrival"] ?? "";
-        const rawEnd = norm["endtime"] ?? norm["end"] ?? norm["departure"] ?? "";
-        const status = String(norm["status"] ?? "Scheduled").trim();
+    const headers = splitCsvLine(header, delim).map(normalizeKey);
+    const rows: PreviewRow[] = [];
+
+    for (let i = 1; i < nonEmpty.length; i++) {
+        const vals = splitCsvLine(nonEmpty[i], delim);
+        const raw: Record<string, string> = {};
+        headers.forEach((h, idx) => { raw[h] = (vals[idx] ?? "").trim(); });
+
+        const truckId = (raw["truckid"] ?? raw["truck"] ?? raw["truckno"] ?? "").trim();
+        const bayId = (raw["bayid"] ?? raw["bay"] ?? raw["bayno"] ?? raw["baynumber"] ?? "").trim();
+        const rawStart = raw["starttime"] ?? raw["start"] ?? raw["arrival"] ?? "";
+        const rawEnd = raw["endtime"] ?? raw["end"] ?? raw["departure"] ?? "";
+        const status = (raw["status"] ?? "Scheduled").trim() || "Scheduled";
 
         const startTime = parseTimeValue(rawStart);
         const endTime = parseTimeValue(rawEnd);
@@ -181,40 +192,55 @@ function normalizeRows(raw: Record<string, unknown>[]): PreviewRow[] {
         else if (!endTime) _error = "Invalid EndTime";
         else if (startTime >= endTime) _error = "StartTime >= EndTime";
 
-        return {
+        rows.push({
             truckId,
             bayId,
             startTime: startTime ?? "",
             endTime: endTime ?? "",
             status,
-            _rowNum: i + 2,
+            _rowNum: i + 1,
             _error
-        };
-    });
+        });
+    }
+    return rows;
 }
 
-function parseTimeValue(val: unknown): string | null {
-    if (val === null || val === undefined || val === "") return null;
-    if (val instanceof Date) return val.toISOString();
-    if (typeof val === "number") {
-        // Excel serial date (days since 1899-12-30)
-        const d = new Date(Math.round((val - 25569) * 86400 * 1000));
-        return isNaN(d.getTime()) ? null : d.toISOString();
-    }
-    if (typeof val === "string") {
-        const s = val.trim();
-        if (!s) return null;
-        // HH:MM or HH:MM:SS — treat as today
-        if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(s)) {
-            const parts = s.split(":").map(Number);
-            const d = new Date();
-            d.setHours(parts[0], parts[1], parts[2] ?? 0, 0);
-            return d.toISOString();
+function splitCsvLine(line: string, delim: string): string[] {
+    const fields: string[] = [];
+    let cur = "";
+    let inQuote = false;
+    for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (inQuote) {
+            if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+            else if (ch === '"') { inQuote = false; }
+            else { cur += ch; }
+        } else {
+            if (ch === '"') { inQuote = true; }
+            else if (ch === delim) { fields.push(cur); cur = ""; }
+            else { cur += ch; }
         }
-        const d = new Date(s);
+    }
+    fields.push(cur);
+    return fields;
+}
+
+function normalizeKey(k: string): string {
+    return k.toLowerCase().replace(/[\s_\-.]/g, "");
+}
+
+function parseTimeValue(val: string): string | null {
+    const s = val.trim();
+    if (!s) return null;
+    // HH:MM or HH:MM:SS — treat as today
+    if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(s)) {
+        const parts = s.split(":").map(Number);
+        const d = new Date();
+        d.setHours(parts[0], parts[1], parts[2] ?? 0, 0);
         return isNaN(d.getTime()) ? null : d.toISOString();
     }
-    return null;
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d.toISOString();
 }
 
 function formatPreviewTime(iso: string): string {
