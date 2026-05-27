@@ -3,7 +3,7 @@ import { ObjectItem } from "mendix";
 import { ScheduleWidgetContainerProps } from "../typings/ScheduleWidgetProps";
 import { SchedulerCanvas } from "./components/SchedulerCanvas";
 import { Toolbar } from "./components/Toolbar";
-import { ScheduleBlock, ExcelRow, PendingEdit, NewSlot } from "./components/types";
+import { ScheduleBlock, BayGroup, ExcelRow, PendingEdit, NewSlot } from "./components/types";
 import "./ui/ScheduleWidget.css";
 
 export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElement {
@@ -15,6 +15,7 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         endTimeAttr,
         statusAttr,
         colorAttr,
+        groupIdAttr,
         displayDate,
         onTruckClick,
         onScheduleChange,
@@ -23,12 +24,15 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         rowHeight,
         showDwellMarkers,
         defaultDwellMinutes,
+        timeRangeStart,
+        timeRangeEnd,
         name,
         class: cssClass,
         style
     } = props;
 
     const [localDisplayDay, setLocalDisplayDay] = useState<Date>(() => new Date());
+    const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
     // Resolve which day to display
     const displayDay: Date = useMemo(() => {
@@ -52,6 +56,7 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
             const endDate = endTimeAttr.get(item).value as Date | undefined;
             const status = (statusAttr?.get(item).value as string) ?? "Scheduled";
             const color = (colorAttr?.get(item).value as string) ?? "";
+            const groupId = (groupIdAttr?.get(item).value as string) ?? "__default__";
 
             if (!startDate || !endDate || !bayId) return [];
 
@@ -62,18 +67,41 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
             const startMin = Math.max(0, (startDate.getTime() - dayStart) / 60000);
             const endMin = Math.min(1440, (endDate.getTime() - dayStart) / 60000);
 
-            return [{ item, truckId, bayId, startMin, endMin, status, color, isConflict: false }];
+            return [{ item, truckId, bayId, groupId, startMin, endMin, status, color, isConflict: false }];
         });
-    }, [scheduleData.status, scheduleData.items, displayDay, truckIdAttr, bayIdAttr, startTimeAttr, endTimeAttr, statusAttr, colorAttr]);
+    }, [scheduleData.status, scheduleData.items, displayDay, truckIdAttr, bayIdAttr, startTimeAttr, endTimeAttr, statusAttr, colorAttr, groupIdAttr]);
 
     // ── Conflict detection ────────────────────────────────────────────────────
     const blocks: ScheduleBlock[] = useMemo(() => detectConflicts(rawBlocks), [rawBlocks]);
 
-    // ── Sorted unique bay IDs ─────────────────────────────────────────────────
-    const bays: string[] = useMemo(() => {
-        const unique = [...new Set(blocks.map(b => b.bayId))];
-        return unique.sort((a, b) => naturalCompare(a, b));
+    // ── Derive groups from blocks ─────────────────────────────────────────────
+    const groups: BayGroup[] = useMemo(() => {
+        const map = new Map<string, { label: string; bays: Set<string> }>();
+        for (const b of blocks) {
+            if (!map.has(b.groupId)) {
+                map.set(b.groupId, {
+                    label: b.groupId === "__default__" ? "" : b.groupId,
+                    bays: new Set()
+                });
+            }
+            map.get(b.groupId)!.bays.add(b.bayId);
+        }
+        return [...map.entries()].map(([id, v]) => ({
+            id,
+            label: v.label,
+            bays: [...v.bays].sort((a, b) => naturalCompare(a, b))
+        }));
     }, [blocks]);
+
+    // ── Group toggle ──────────────────────────────────────────────────────────
+    const handleGroupToggle = useCallback((groupId: string) => {
+        setCollapsedGroups(prev => {
+            const next = new Set(prev);
+            if (next.has(groupId)) next.delete(groupId);
+            else next.add(groupId);
+            return next;
+        });
+    }, []);
 
     // ── Day navigation ────────────────────────────────────────────────────────
     const handleDayChange = useCallback(
@@ -146,6 +174,10 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
     const isLoading = scheduleData.status === "loading";
     const isEmpty = scheduleData.status === "available" && blocks.length === 0;
 
+    // Resolve time range with safe defaults
+    const rangeStart = typeof timeRangeStart === "number" ? Math.max(0, Math.min(23, timeRangeStart)) : 0;
+    const rangeEnd = typeof timeRangeEnd === "number" ? Math.max(rangeStart + 1, Math.min(24, timeRangeEnd)) : 24;
+
     return (
         <div id={name} className={`truck-scheduler${cssClass ? ` ${cssClass}` : ""}`} style={style}>
             <Toolbar
@@ -164,10 +196,14 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
                 )}
                 <SchedulerCanvas
                     blocks={blocks}
-                    bays={bays}
+                    groups={groups}
+                    collapsedGroups={collapsedGroups}
+                    onGroupToggle={handleGroupToggle}
                     rowHeight={rowHeight ?? 30}
                     showDwellMarkers={showDwellMarkers ?? true}
                     defaultDwellMinutes={defaultDwellMinutes ?? 25}
+                    timeRangeStart={rangeStart}
+                    timeRangeEnd={rangeEnd}
                     onTruckClick={handleTruckClick}
                     onScheduleChange={handleScheduleChange}
                     onEmptySlotClick={handleEmptySlotClick}
@@ -216,7 +252,7 @@ export function detectConflicts(blocks: ScheduleBlock[]): ScheduleBlock[] {
 }
 
 // Natural sort: "Bay-2" < "Bay-10" < "Bay-20"
-function naturalCompare(a: string, b: string): number {
+export function naturalCompare(a: string, b: string): number {
     const re = /(\d+)/g;
     const pa = a.split(re);
     const pb = b.split(re);

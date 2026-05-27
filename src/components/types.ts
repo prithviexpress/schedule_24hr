@@ -4,11 +4,18 @@ export interface ScheduleBlock {
     item: ObjectItem;
     truckId: string;
     bayId: string;
+    groupId: string;
     startMin: number;  // minutes from midnight, 0–1440
     endMin: number;    // minutes from midnight, 0–1440
     status: string;
     color: string;
     isConflict: boolean;
+}
+
+export interface BayGroup {
+    id: string;
+    label: string;
+    bays: string[];
 }
 
 export interface ExcelRow {

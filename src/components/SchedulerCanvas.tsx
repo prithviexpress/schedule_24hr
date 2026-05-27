@@ -7,90 +7,543 @@ import {
     useRef,
     useState
 } from "react";
-import { ScheduleBlock } from "./types";
+import { ScheduleBlock, BayGroup } from "./types";
 
-// ─── Layout ──────────────────────────────────────────────────────────────────
-const BAY_LABEL_W = 100;
-const HEADER_H = 40;
+// ─── Layout constants ─────────────────────────────────────────────────────────
+const GROUP_H = 36;
+const BAY_LABEL_W = 120;
+const HEADER_H = 36;
 const SCROLLBAR_W = 10;
-const RESIZE_HIT = 6;   // px grab zone on block edges
+const RESIZE_HIT = 6;
 const MIN_BLOCK_MIN = 1;
-const MINUTES = 1440;   // minutes in a day
 
-// ─── Colors ───────────────────────────────────────────────────────────────────
+// ─── Color palette ────────────────────────────────────────────────────────────
 const C = {
-    headerBg: "#f5f5f5",
-    headerText: "#555",
-    headerBorder: "#ccc",
-    gridMajor: "#cccccc",
-    gridMinor: "#eeeeee",
-    dwellShade: "rgba(74,144,217,0.06)",
+    outerBg: "#f0ede8",
+    headerBg: "#f5f2ed",
+    headerText: "#777",
+    headerBorder: "#dddbd5",
+
+    groupBg: "#eeebe5",
+    groupText: "#222",
+    groupBorder: "#d8d5cf",
+    groupAccent: "#c8c0b0",
+
     rowEven: "#ffffff",
-    rowOdd: "#fafafa",
-    rowBorder: "#ebebeb",
-    labelText: "#444",
-    blockScheduled: "#4a90d9",
-    blockInProgress: "#f57c00",
-    blockCompleted: "#43a047",
+    rowOdd: "#faf9f7",
+    rowBorder: "#eeecea",
+    labelBg: "#f7f5f2",
+    labelText: "#555",
+    labelBorder: "#dddbd5",
+
+    gridMajor: "#dddbd5",
+    gridMinor: "#f0ede8",
+    dwellShade: "rgba(180,170,150,0.07)",
+
+    blockScheduled: "#f5c518",
+    blockScheduledText: "#6b4f00",
+    blockInProgress: "#7ec87e",
+    blockInProgressText: "#1a5218",
+    blockCompleted: "#404040",
+    blockCompletedText: "#ffffff",
     blockConflict: "#e53935",
-    blockText: "#ffffff",
-    blockEdge: "rgba(0,0,0,0.25)",
-    scrollTrack: "#f0f0f0",
-    scrollThumb: "#bbb",
+    blockConflictText: "#ffffff",
+    blockEdge: "rgba(0,0,0,0.18)",
+
+    scrollTrack: "#e8e4de",
+    scrollThumb: "#bbb8b2",
     scrollThumbHover: "#888",
 };
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Internal types ───────────────────────────────────────────────────────────
 
 type DragMode = "move" | "resize-left" | "resize-right";
 
 interface DragState {
     mode: DragMode;
     block: ScheduleBlock;
-    startX: number;        // canvas X at mousedown
-    startY: number;        // canvas Y at mousedown
+    startX: number;
+    startY: number;
     origStart: number;
     origEnd: number;
-    origBayIdx: number;
+    origRowIdx: number;   // index in rows[] of the bay row where drag started
     pxPerMin: number;
     currentStart: number;
     currentEnd: number;
-    currentBayIdx: number;
-    moved: boolean;        // true once mouse moves beyond click threshold
+    currentRowIdx: number; // index in rows[] of the bay row currently under cursor
+    moved: boolean;
 }
 
-interface CanvasRenderParams {
-    blocks: ScheduleBlock[];
-    bays: string[];
-    bayIndexMap: Map<string, number>;
-    scrollY: number;
-    canvasW: number;
-    canvasH: number;       // viewport height (canvas element height)
-    rowH: number;
-    showDwell: boolean;
-    drag: DragState | null;
+interface CanvasRow {
+    type: "group" | "bay";
+    groupId: string;
+    label: string;
+    y: number;
+    h: number;
+    bayId?: string; // only for type === "bay"
 }
+
+// ─── Props ────────────────────────────────────────────────────────────────────
 
 export interface SchedulerCanvasProps {
     blocks: ScheduleBlock[];
-    bays: string[];
+    groups: BayGroup[];
+    collapsedGroups: Set<string>;
+    onGroupToggle: (groupId: string) => void;
     rowHeight: number;
     showDwellMarkers: boolean;
+    defaultDwellMinutes: number;
+    timeRangeStart: number;   // 0-23
+    timeRangeEnd: number;     // 1-24
     onTruckClick: (block: ScheduleBlock) => void;
     onScheduleChange: (block: ScheduleBlock, newStartMin: number, newEndMin: number) => void;
     onEmptySlotClick: (bayId: string, startMin: number, endMin: number, defaultDwell: number) => void;
-    defaultDwellMinutes: number;
 }
+
+// ─── Helper: compute row layout ───────────────────────────────────────────────
+
+function computeRows(
+    groups: BayGroup[],
+    collapsedGroups: Set<string>,
+    hasMultipleGroups: boolean,
+    rowH: number
+): CanvasRow[] {
+    const rows: CanvasRow[] = [];
+    let y = 0;
+    for (const g of groups) {
+        if (hasMultipleGroups || g.id !== "__default__") {
+            rows.push({ type: "group", groupId: g.id, label: g.label || g.id, y, h: GROUP_H });
+            y += GROUP_H;
+        }
+        if (!collapsedGroups.has(g.id)) {
+            for (const bayId of g.bays) {
+                rows.push({ type: "bay", groupId: g.id, label: bayId, bayId, y, h: rowH });
+                y += rowH;
+            }
+        }
+    }
+    return rows;
+}
+
+// ─── Time coordinate helpers ──────────────────────────────────────────────────
+
+function minToX(
+    min: number,
+    rangeStart: number,
+    rangeEnd: number,
+    gridW: number
+): number {
+    const rangeMins = (rangeEnd - rangeStart) * 60;
+    return BAY_LABEL_W + ((min - rangeStart * 60) / rangeMins) * gridW;
+}
+
+function xToMin(
+    x: number,
+    rangeStart: number,
+    rangeEnd: number,
+    gridW: number
+): number {
+    const rangeMins = (rangeEnd - rangeStart) * 60;
+    return rangeStart * 60 + ((x - BAY_LABEL_W) / gridW) * rangeMins;
+}
+
+// ─── Draw helpers ─────────────────────────────────────────────────────────────
+
+function drawRoundedRect(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    r: number
+): void {
+    r = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+}
+
+function drawHeader(
+    ctx: CanvasRenderingContext2D,
+    canvasW: number,
+    rangeStart: number,
+    rangeEnd: number,
+    gridW: number,
+    showDwell: boolean
+): void {
+    // Background
+    ctx.fillStyle = C.headerBg;
+    ctx.fillRect(0, 0, canvasW, HEADER_H);
+
+    // "Resource" label in label column
+    ctx.fillStyle = C.headerText;
+    ctx.font = "bold 11px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("Resource", BAY_LABEL_W / 2, HEADER_H / 2);
+
+    // Bottom border
+    ctx.strokeStyle = C.headerBorder;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, HEADER_H - 0.5);
+    ctx.lineTo(canvasW, HEADER_H - 0.5);
+    ctx.stroke();
+
+    // Right border of label column
+    ctx.strokeStyle = C.labelBorder;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(BAY_LABEL_W - 0.5, 0);
+    ctx.lineTo(BAY_LABEL_W - 0.5, HEADER_H);
+    ctx.stroke();
+
+    // Hour labels and gridlines
+    ctx.font = "10px sans-serif";
+    ctx.textAlign = "center";
+
+    const pxPerMin = gridW / ((rangeEnd - rangeStart) * 60);
+
+    for (let h = rangeStart; h <= rangeEnd; h++) {
+        const x = minToX(h * 60, rangeStart, rangeEnd, gridW);
+        ctx.strokeStyle = C.gridMajor;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, 4);
+        ctx.lineTo(x, HEADER_H - 1);
+        ctx.stroke();
+
+        if (h < rangeEnd) {
+            ctx.fillStyle = C.headerText;
+            const labelX = x + 30 * pxPerMin;
+            ctx.fillText(`${String(h).padStart(2, "0")}:00`, labelX, HEADER_H / 2);
+        }
+    }
+
+    // 25-min dwell ticks in header
+    if (showDwell) {
+        ctx.strokeStyle = C.gridMinor;
+        ctx.lineWidth = 0.5;
+        for (let m = rangeStart * 60 + 25; m < rangeEnd * 60; m += 25) {
+            if (m % 60 === 0) continue;
+            const x = minToX(m, rangeStart, rangeEnd, gridW);
+            ctx.beginPath();
+            ctx.moveTo(x, HEADER_H - 10);
+            ctx.lineTo(x, HEADER_H - 1);
+            ctx.stroke();
+        }
+    }
+}
+
+function drawGroupRow(
+    ctx: CanvasRenderingContext2D,
+    row: CanvasRow,
+    canvasW: number,
+    collapsed: boolean
+): void {
+    // Background
+    ctx.fillStyle = C.groupBg;
+    ctx.fillRect(0, row.y, canvasW, row.h);
+
+    // Left accent border (4px)
+    ctx.fillStyle = C.groupAccent;
+    ctx.fillRect(0, row.y, 4, row.h);
+
+    // Bottom border
+    ctx.strokeStyle = C.groupBorder;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, row.y + row.h - 0.5);
+    ctx.lineTo(canvasW, row.y + row.h - 0.5);
+    ctx.stroke();
+
+    // Label text
+    ctx.fillStyle = C.groupText;
+    ctx.font = "bold 13px sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(row.label, 12, row.y + row.h / 2);
+
+    // Chevron
+    ctx.fillStyle = C.groupText;
+    ctx.font = "12px sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(collapsed ? "▼" : "▲", canvasW - SCROLLBAR_W - 8, row.y + row.h / 2);
+}
+
+function drawBayRow(
+    ctx: CanvasRenderingContext2D,
+    row: CanvasRow,
+    rowIdx: number,
+    canvasW: number,
+    rangeStart: number,
+    rangeEnd: number,
+    gridW: number,
+    showDwell: boolean
+): void {
+    const y = row.y;
+    const h = row.h;
+
+    // Row background (alternating)
+    ctx.fillStyle = rowIdx % 2 === 0 ? C.rowEven : C.rowOdd;
+    ctx.fillRect(BAY_LABEL_W, y, canvasW - BAY_LABEL_W - SCROLLBAR_W, h);
+
+    // Label column background
+    ctx.fillStyle = C.labelBg;
+    ctx.fillRect(0, y, BAY_LABEL_W, h);
+
+    const pxPerMin = gridW / ((rangeEnd - rangeStart) * 60);
+
+    // 25-min dwell shading
+    if (showDwell) {
+        ctx.fillStyle = C.dwellShade;
+        for (let m = rangeStart * 60; m < rangeEnd * 60; m += 50) {
+            const x = minToX(m, rangeStart, rangeEnd, gridW);
+            ctx.fillRect(x, y, 25 * pxPerMin, h);
+        }
+    }
+
+    // Major hour gridlines
+    ctx.strokeStyle = C.gridMajor;
+    ctx.lineWidth = 0.5;
+    for (let hh = rangeStart; hh <= rangeEnd; hh++) {
+        const x = minToX(hh * 60, rangeStart, rangeEnd, gridW);
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x, y + h);
+        ctx.stroke();
+    }
+
+    // Row bottom border
+    ctx.strokeStyle = C.rowBorder;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, y + h - 0.5);
+    ctx.lineTo(canvasW - SCROLLBAR_W, y + h - 0.5);
+    ctx.stroke();
+
+    // Label column right border
+    ctx.strokeStyle = C.labelBorder;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(BAY_LABEL_W - 0.5, y);
+    ctx.lineTo(BAY_LABEL_W - 0.5, y + h);
+    ctx.stroke();
+
+    // Bay label
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, y, BAY_LABEL_W - 2, h);
+    ctx.clip();
+    ctx.fillStyle = C.labelText;
+    ctx.font = "11px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(row.label, BAY_LABEL_W / 2, y + h / 2);
+    ctx.restore();
+}
+
+function blockColors(block: ScheduleBlock): { fill: string; text: string } {
+    if (block.color) {
+        // For custom colors, use white text (caller's responsibility)
+        return { fill: block.color, text: "#ffffff" };
+    }
+    if (block.isConflict) {
+        return { fill: C.blockConflict, text: C.blockConflictText };
+    }
+    const s = (block.status ?? "").toLowerCase().replace(/\s+/g, "");
+    if (s === "inprogress" || s === "docked" || s === "arriving") {
+        return { fill: C.blockInProgress, text: C.blockInProgressText };
+    }
+    if (s === "completed" || s === "done" || s === "departed") {
+        return { fill: C.blockCompleted, text: C.blockCompletedText };
+    }
+    // Default: Scheduled / Arriving / anything else
+    return { fill: C.blockScheduled, text: C.blockScheduledText };
+}
+
+function drawBlock(
+    ctx: CanvasRenderingContext2D,
+    block: ScheduleBlock,
+    row: CanvasRow,
+    startMin: number,
+    endMin: number,
+    rangeStart: number,
+    rangeEnd: number,
+    gridW: number,
+    isDragging: boolean
+): void {
+    const rangeStartMin = rangeStart * 60;
+    const rangeEndMin = rangeEnd * 60;
+
+    // Clip to visible time range
+    const visStart = Math.max(startMin, rangeStartMin);
+    const visEnd = Math.min(endMin, rangeEndMin);
+    if (visStart >= visEnd) return;
+
+    const bx = minToX(visStart, rangeStart, rangeEnd, gridW);
+    const bxEnd = minToX(visEnd, rangeStart, rangeEnd, gridW);
+    const bw = Math.max(2, bxEnd - bx);
+    const by = row.y + 2;
+    const bh = row.h - 4;
+
+    if (bw < 1 || bh < 1) return;
+
+    const { fill, text } = blockColors(block);
+
+    ctx.globalAlpha = isDragging ? 0.75 : 1;
+
+    // Rounded rect (4px radius)
+    drawRoundedRect(ctx, bx, by, bw, bh, 4);
+    ctx.fillStyle = fill;
+    ctx.fill();
+
+    // Conflict border
+    if (block.isConflict) {
+        ctx.strokeStyle = "#b71c1c";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+    }
+
+    // Resize handles
+    if (bw > RESIZE_HIT * 2 + 4) {
+        ctx.fillStyle = C.blockEdge;
+        ctx.fillRect(bx, by, RESIZE_HIT, bh);
+        ctx.fillRect(bx + bw - RESIZE_HIT, by, RESIZE_HIT, bh);
+    }
+
+    // Label text
+    if (bw > 22 && bh > 8) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(bx + RESIZE_HIT, by, bw - RESIZE_HIT * 2, bh);
+        ctx.clip();
+        ctx.fillStyle = text;
+        ctx.font = `${Math.min(11, bh - 4)}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(block.truckId, bx + bw / 2, by + bh / 2);
+        ctx.restore();
+    }
+
+    ctx.globalAlpha = 1;
+}
+
+// ─── Main render function ─────────────────────────────────────────────────────
+
+interface RenderParams {
+    blocks: ScheduleBlock[];
+    rows: CanvasRow[];
+    bayRowMap: Map<string, CanvasRow>;
+    collapsedGroups: Set<string>;
+    scrollY: number;
+    canvasW: number;
+    canvasH: number;
+    rowH: number;
+    showDwell: boolean;
+    drag: DragState | null;
+    rangeStart: number;
+    rangeEnd: number;
+}
+
+function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
+    const { blocks, rows, bayRowMap, collapsedGroups, scrollY, canvasW, canvasH, showDwell, drag, rangeStart, rangeEnd } = p;
+    const gridW = canvasW - BAY_LABEL_W - SCROLLBAR_W;
+    const viewH = canvasH - HEADER_H;
+
+    ctx.clearRect(0, 0, canvasW, canvasH);
+
+    // Background
+    ctx.fillStyle = C.outerBg;
+    ctx.fillRect(0, 0, canvasW, canvasH);
+
+    // Draw header (fixed, not scrolled)
+    drawHeader(ctx, canvasW, rangeStart, rangeEnd, gridW, showDwell);
+
+    // Clip to scrollable viewport
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, HEADER_H, canvasW, viewH);
+    ctx.clip();
+    ctx.translate(0, HEADER_H - scrollY);
+
+    // Determine visible row range
+    const viewTop = scrollY;
+    const viewBot = scrollY + viewH;
+
+    let bayRowIdx = 0; // counter for alternating row color
+    for (const row of rows) {
+        if (row.y + row.h <= viewTop) {
+            if (row.type === "bay") bayRowIdx++;
+            continue;
+        }
+        if (row.y >= viewBot) break;
+
+        if (row.type === "group") {
+            drawGroupRow(ctx, row, canvasW, collapsedGroups.has(row.groupId));
+        } else {
+            drawBayRow(ctx, row, bayRowIdx, canvasW, rangeStart, rangeEnd, gridW, showDwell);
+            bayRowIdx++;
+        }
+    }
+
+    // Draw blocks
+    const rangeStartMin = rangeStart * 60;
+    const rangeEndMin = rangeEnd * 60;
+
+    for (const block of blocks) {
+        let startMin = block.startMin;
+        let endMin = block.endMin;
+        let row = bayRowMap.get(block.bayId);
+
+        if (!row) continue;
+
+        // Apply drag state
+        if (drag && drag.block.item === block.item) {
+            startMin = drag.currentStart;
+            endMin = drag.currentEnd;
+            // Row may have changed (vertical move to different bay)
+            const dragRow = rows[drag.currentRowIdx];
+            if (dragRow && dragRow.type === "bay") {
+                row = dragRow;
+            }
+        }
+
+        // Skip if outside visible time range
+        if (endMin <= rangeStartMin || startMin >= rangeEndMin) continue;
+
+        // Skip if row not visible vertically
+        if (row.y + row.h <= viewTop || row.y >= viewBot) continue;
+
+        drawBlock(ctx, block, row, startMin, endMin, rangeStart, rangeEnd, gridW, drag?.block.item === block.item);
+    }
+
+    ctx.restore();
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export function SchedulerCanvas({
     blocks,
-    bays,
+    groups,
+    collapsedGroups,
+    onGroupToggle,
     rowHeight,
     showDwellMarkers,
+    defaultDwellMinutes,
+    timeRangeStart,
+    timeRangeEnd,
     onTruckClick,
     onScheduleChange,
-    onEmptySlotClick,
-    defaultDwellMinutes
+    onEmptySlotClick
 }: SchedulerCanvasProps): ReactElement {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -102,18 +555,42 @@ export function SchedulerCanvas({
     const rafRef = useRef<number>(0);
     const scrollThumbDragRef = useRef<{ startY: number; startScrollY: number } | null>(null);
 
-    // Keep scrollY synced to ref for use in RAF callbacks
-    const updateScrollY = useCallback((y: number) => {
-        const maxScroll = Math.max(0, bays.length * rowHeight - (canvasH - HEADER_H));
-        const clamped = Math.max(0, Math.min(maxScroll, y));
-        scrollYRef.current = clamped;
-        setScrollY(clamped);
-    }, [bays.length, rowHeight, canvasH]);
+    const hasMultipleGroups = groups.length > 1 || (groups.length === 1 && groups[0]?.id !== "__default__");
 
-    // ─── Bay index map (O(1) lookup during draw) ──────────────────────────────
-    const bayIndexMap = useMemo(() => new Map(bays.map((b, i) => [b, i])), [bays]);
+    // Compute rows from groups
+    const rows = useMemo(
+        () => computeRows(groups, collapsedGroups, hasMultipleGroups, rowHeight),
+        [groups, collapsedGroups, hasMultipleGroups, rowHeight]
+    );
 
-    // ─── Responsive resize ────────────────────────────────────────────────────
+    // Total virtual height
+    const totalH = useMemo(() => {
+        if (rows.length === 0) return 0;
+        const last = rows[rows.length - 1];
+        return last.y + last.h;
+    }, [rows]);
+
+    // Bay row map: bayId -> CanvasRow (for fast block placement)
+    const bayRowMap = useMemo(() => {
+        const m = new Map<string, CanvasRow>();
+        for (const r of rows) {
+            if (r.type === "bay" && r.bayId) m.set(r.bayId, r);
+        }
+        return m;
+    }, [rows]);
+
+    // Scroll clamping
+    const updateScrollY = useCallback(
+        (y: number) => {
+            const maxScroll = Math.max(0, totalH - (canvasH - HEADER_H));
+            const clamped = Math.max(0, Math.min(maxScroll, y));
+            scrollYRef.current = clamped;
+            setScrollY(clamped);
+        },
+        [totalH, canvasH]
+    );
+
+    // Responsive resize observer
     useLayoutEffect(() => {
         const el = containerRef.current;
         if (!el) return;
@@ -126,51 +603,73 @@ export function SchedulerCanvas({
         return () => obs.disconnect();
     }, []);
 
-    // ─── Draw ─────────────────────────────────────────────────────────────────
+    // Draw
     const drawCanvas = useCallback(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
-        render(ctx, {
+        renderCanvas(ctx, {
             blocks,
-            bays,
-            bayIndexMap,
+            rows,
+            bayRowMap,
+            collapsedGroups,
             scrollY: scrollYRef.current,
             canvasW,
             canvasH,
             rowH: rowHeight,
             showDwell: showDwellMarkers,
-            drag: dragRef.current
+            drag: dragRef.current,
+            rangeStart: timeRangeStart,
+            rangeEnd: timeRangeEnd
         });
-    }, [blocks, bays, bayIndexMap, canvasW, canvasH, rowHeight, showDwellMarkers]);
+    }, [blocks, rows, bayRowMap, collapsedGroups, canvasW, canvasH, rowHeight, showDwellMarkers, timeRangeStart, timeRangeEnd]);
 
     useEffect(() => { drawCanvas(); }, [drawCanvas]);
 
-    // ─── Scroll clamp when bays/rowHeight/canvasH change ─────────────────────
+    // Re-clamp scroll when layout changes
     useEffect(() => {
         updateScrollY(scrollYRef.current);
-    }, [bays.length, rowHeight, canvasH, updateScrollY]);
+    }, [totalH, canvasH, updateScrollY]);
 
     // ─── Hit testing ──────────────────────────────────────────────────────────
-    const hitTest = useCallback(
+
+    const hitTestRow = useCallback(
+        (canvasY: number): CanvasRow | null => {
+            const worldY = canvasY - HEADER_H + scrollYRef.current;
+            // Binary-search friendly: rows are sorted by y
+            for (const row of rows) {
+                if (worldY >= row.y && worldY < row.y + row.h) return row;
+                if (row.y > worldY) break;
+            }
+            return null;
+        },
+        [rows]
+    );
+
+    const hitTestBlock = useCallback(
         (canvasX: number, canvasY: number): { block: ScheduleBlock; mode: DragMode } | null => {
             if (canvasY < HEADER_H) return null;
-            const gridW = canvasW - BAY_LABEL_W - SCROLLBAR_W;
-            const pxPerMin = gridW / MINUTES;
-            const worldY = canvasY - HEADER_H + scrollYRef.current;
-            const bayIdx = Math.floor(worldY / rowHeight);
-            if (bayIdx < 0 || bayIdx >= bays.length) return null;
-            const bayId = bays[bayIdx];
+            const row = hitTestRow(canvasY);
+            if (!row || row.type !== "bay" || !row.bayId) return null;
 
-            // Check blocks in reverse (last drawn = top)
+            const gridW = canvasW - BAY_LABEL_W - SCROLLBAR_W;
+            const rangeStartMin = timeRangeStart * 60;
+            const rangeEndMin = timeRangeEnd * 60;
+
             for (let i = blocks.length - 1; i >= 0; i--) {
                 const b = blocks[i];
-                if (b.bayId !== bayId) continue;
-                const bx = BAY_LABEL_W + b.startMin * pxPerMin;
-                const bw = Math.max(2, (b.endMin - b.startMin) * pxPerMin);
-                const by = bayIdx * rowHeight - scrollYRef.current + HEADER_H + 2;
-                const bh = rowHeight - 4;
+                if (b.bayId !== row.bayId) continue;
+
+                const visStart = Math.max(b.startMin, rangeStartMin);
+                const visEnd = Math.min(b.endMin, rangeEndMin);
+                if (visStart >= visEnd) continue;
+
+                const bx = minToX(visStart, timeRangeStart, timeRangeEnd, gridW);
+                const bxEnd = minToX(visEnd, timeRangeStart, timeRangeEnd, gridW);
+                const bw = Math.max(2, bxEnd - bx);
+                const by = row.y - scrollYRef.current + HEADER_H + 2;
+                const bh = row.h - 4;
 
                 if (canvasX >= bx && canvasX <= bx + bw && canvasY >= by && canvasY <= by + bh) {
                     if (canvasX <= bx + RESIZE_HIT) return { block: b, mode: "resize-left" };
@@ -180,7 +679,7 @@ export function SchedulerCanvas({
             }
             return null;
         },
-        [blocks, bays, canvasW, rowHeight]
+        [blocks, canvasW, timeRangeStart, timeRangeEnd, hitTestRow]
     );
 
     const canvasCoords = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -188,17 +687,29 @@ export function SchedulerCanvas({
         return { x: e.clientX - rect.left, y: e.clientY - rect.top };
     }, []);
 
-    // ─── Mouse events ─────────────────────────────────────────────────────────
+    // ─── Mouse events ──────────────────────────────────────────────────────────
 
     const handleMouseDown = useCallback(
         (e: React.MouseEvent<HTMLCanvasElement>) => {
             if (e.button !== 0) return;
             const { x, y } = canvasCoords(e);
-            const hit = hitTest(x, y);
+
+            // Check group header click
+            if (y >= HEADER_H) {
+                const row = hitTestRow(y);
+                if (row?.type === "group") {
+                    onGroupToggle(row.groupId);
+                    return;
+                }
+            }
+
+            const hit = hitTestBlock(x, y);
             const gridW = canvasW - BAY_LABEL_W - SCROLLBAR_W;
-            const pxPerMin = gridW / MINUTES;
+            const pxPerMin = gridW / ((timeRangeEnd - timeRangeStart) * 60);
 
             if (hit) {
+                // Find row index for vertical drag
+                const rowIdx = rows.findIndex(r => r.type === "bay" && r.bayId === hit.block.bayId);
                 dragRef.current = {
                     mode: hit.mode,
                     block: hit.block,
@@ -206,16 +717,16 @@ export function SchedulerCanvas({
                     startY: y,
                     origStart: hit.block.startMin,
                     origEnd: hit.block.endMin,
-                    origBayIdx: bayIndexMap.get(hit.block.bayId) ?? 0,
+                    origRowIdx: rowIdx,
                     pxPerMin,
                     currentStart: hit.block.startMin,
                     currentEnd: hit.block.endMin,
-                    currentBayIdx: bayIndexMap.get(hit.block.bayId) ?? 0,
+                    currentRowIdx: rowIdx,
                     moved: false
                 };
             }
         },
-        [hitTest, canvasCoords, canvasW, bayIndexMap]
+        [hitTestRow, hitTestBlock, canvasCoords, canvasW, timeRangeStart, timeRangeEnd, rows, onGroupToggle]
     );
 
     const handleMouseMove = useCallback(
@@ -225,15 +736,20 @@ export function SchedulerCanvas({
 
             if (!drag) {
                 // Update cursor
-                const hit = hitTest(x, y);
+                const row = hitTestRow(y);
                 const canvas = canvasRef.current;
                 if (canvas) {
-                    canvas.style.cursor =
-                        hit?.mode === "resize-left" || hit?.mode === "resize-right"
-                            ? "ew-resize"
-                            : hit?.mode === "move"
-                            ? "grab"
-                            : "default";
+                    if (row?.type === "group") {
+                        canvas.style.cursor = "pointer";
+                    } else {
+                        const hit = hitTestBlock(x, y);
+                        canvas.style.cursor =
+                            hit?.mode === "resize-left" || hit?.mode === "resize-right"
+                                ? "ew-resize"
+                                : hit?.mode === "move"
+                                ? "grab"
+                                : "default";
+                    }
                 }
                 return;
             }
@@ -243,27 +759,38 @@ export function SchedulerCanvas({
             if (!drag.moved) return;
 
             const deltaMin = dx / drag.pxPerMin;
+            const rangeStartMin = timeRangeStart * 60;
+            const rangeEndMin = timeRangeEnd * 60;
 
             if (drag.mode === "move") {
                 const dur = drag.origEnd - drag.origStart;
-                const ns = Math.max(0, Math.min(MINUTES - dur, drag.origStart + deltaMin));
+                const ns = Math.max(rangeStartMin, Math.min(rangeEndMin - dur, drag.origStart + deltaMin));
                 drag.currentStart = ns;
                 drag.currentEnd = ns + dur;
-                // Vertical bay change
+
+                // Vertical bay change — only snap to bay rows
                 const worldY = y - HEADER_H + scrollYRef.current;
-                const newBayIdx = Math.max(0, Math.min(bays.length - 1, Math.floor(worldY / rowHeight)));
-                drag.currentBayIdx = newBayIdx;
+                const bayRows = rows.filter(r => r.type === "bay");
+                let newRowIdx = drag.origRowIdx;
+                for (let i = 0; i < bayRows.length; i++) {
+                    if (worldY >= bayRows[i].y && worldY < bayRows[i].y + bayRows[i].h) {
+                        // Find this bay's index in rows[]
+                        const globalIdx = rows.findIndex(r => r === bayRows[i]);
+                        if (globalIdx >= 0) newRowIdx = globalIdx;
+                        break;
+                    }
+                }
+                drag.currentRowIdx = newRowIdx;
             } else if (drag.mode === "resize-left") {
-                drag.currentStart = Math.max(0, Math.min(drag.origEnd - MIN_BLOCK_MIN, drag.origStart + deltaMin));
+                drag.currentStart = Math.max(rangeStartMin, Math.min(drag.origEnd - MIN_BLOCK_MIN, drag.origStart + deltaMin));
             } else {
-                drag.currentEnd = Math.min(MINUTES, Math.max(drag.origStart + MIN_BLOCK_MIN, drag.origEnd + deltaMin));
+                drag.currentEnd = Math.min(rangeEndMin, Math.max(drag.origStart + MIN_BLOCK_MIN, drag.origEnd + deltaMin));
             }
 
-            // Schedule redraw
             cancelAnimationFrame(rafRef.current);
             rafRef.current = requestAnimationFrame(drawCanvas);
         },
-        [canvasCoords, hitTest, canvasW, bays.length, rowHeight, drawCanvas]
+        [canvasCoords, hitTestRow, hitTestBlock, rows, timeRangeStart, timeRangeEnd, drawCanvas]
     );
 
     const handleMouseUp = useCallback(
@@ -273,15 +800,14 @@ export function SchedulerCanvas({
             dragRef.current = null;
 
             if (!drag) {
-                // Click on empty slot — create new block
+                // Click on empty slot
                 if (y > HEADER_H && x > BAY_LABEL_W) {
-                    const gridW = canvasW - BAY_LABEL_W - SCROLLBAR_W;
-                    const pxPerMin = gridW / MINUTES;
-                    const worldY = y - HEADER_H + scrollYRef.current;
-                    const bayIdx = Math.floor(worldY / rowHeight);
-                    if (bayIdx >= 0 && bayIdx < bays.length) {
-                        const startMin = Math.max(0, Math.min(MINUTES - defaultDwellMinutes, (x - BAY_LABEL_W) / pxPerMin));
-                        onEmptySlotClick(bays[bayIdx], startMin, startMin + defaultDwellMinutes, defaultDwellMinutes);
+                    const row = hitTestRow(y);
+                    if (row?.type === "bay" && row.bayId) {
+                        const gridW = canvasW - BAY_LABEL_W - SCROLLBAR_W;
+                        const startMin = Math.round(xToMin(x, timeRangeStart, timeRangeEnd, gridW));
+                        const clampedStart = Math.max(timeRangeStart * 60, Math.min(timeRangeEnd * 60 - defaultDwellMinutes, startMin));
+                        onEmptySlotClick(row.bayId, clampedStart, clampedStart + defaultDwellMinutes, defaultDwellMinutes);
                     }
                 }
                 drawCanvas();
@@ -289,11 +815,10 @@ export function SchedulerCanvas({
             }
 
             if (!drag.moved) {
-                // Simple click on a block
                 onTruckClick(drag.block);
             } else {
-                // Commit drag
-                const finalBayId = bays[drag.currentBayIdx] ?? drag.block.bayId;
+                const targetRow = rows[drag.currentRowIdx];
+                const finalBayId = (targetRow?.type === "bay" && targetRow.bayId) ? targetRow.bayId : drag.block.bayId;
                 onScheduleChange(
                     { ...drag.block, bayId: finalBayId },
                     Math.round(drag.currentStart),
@@ -302,12 +827,11 @@ export function SchedulerCanvas({
             }
             drawCanvas();
         },
-        [canvasCoords, canvasW, bays, rowHeight, onTruckClick, onScheduleChange, onEmptySlotClick, defaultDwellMinutes, drawCanvas]
+        [canvasCoords, hitTestRow, canvasW, timeRangeStart, timeRangeEnd, defaultDwellMinutes, rows, onTruckClick, onScheduleChange, onEmptySlotClick, drawCanvas]
     );
 
     const handleMouseLeave = useCallback(() => {
         if (dragRef.current?.moved) {
-            // Cancel drag — revert
             dragRef.current = null;
             drawCanvas();
         } else {
@@ -325,9 +849,9 @@ export function SchedulerCanvas({
     );
 
     // ─── Custom scrollbar ──────────────────────────────────────────────────────
-    const totalH = bays.length * rowHeight;
+
     const viewportH = canvasH - HEADER_H;
-    const thumbH = Math.max(24, viewportH > 0 ? Math.floor((viewportH / totalH) * viewportH) : 0);
+    const thumbH = Math.max(24, totalH > 0 ? Math.floor((viewportH / totalH) * viewportH) : viewportH);
     const thumbTop = totalH > viewportH
         ? Math.floor((scrollY / (totalH - viewportH)) * (viewportH - thumbH))
         : 0;
@@ -336,10 +860,10 @@ export function SchedulerCanvas({
         (e: React.MouseEvent<HTMLDivElement>) => {
             const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
             const clickY = e.clientY - rect.top - HEADER_H;
-            const ratio = clickY / viewportH;
+            const ratio = Math.max(0, Math.min(1, clickY / (viewportH - thumbH)));
             updateScrollY(ratio * (totalH - viewportH));
         },
-        [viewportH, totalH, updateScrollY]
+        [viewportH, totalH, thumbH, updateScrollY]
     );
 
     const handleThumbMouseDown = useCallback(
@@ -350,7 +874,7 @@ export function SchedulerCanvas({
                 const td = scrollThumbDragRef.current;
                 if (!td) return;
                 const dy = mv.clientY - td.startY;
-                const scale = (totalH - viewportH) / (viewportH - thumbH);
+                const scale = totalH > viewportH ? (totalH - viewportH) / (viewportH - thumbH) : 1;
                 updateScrollY(td.startScrollY + dy * scale);
             };
             const onUp = () => {
@@ -365,7 +889,11 @@ export function SchedulerCanvas({
     );
 
     return (
-        <div ref={containerRef} className="truck-scheduler__canvas-container" style={{ display: "flex", flexDirection: "row" }}>
+        <div
+            ref={containerRef}
+            className="truck-scheduler__canvas-container"
+            style={{ display: "flex", flexDirection: "row" }}
+        >
             <canvas
                 ref={canvasRef}
                 width={canvasW}
@@ -391,243 +919,4 @@ export function SchedulerCanvas({
             </div>
         </div>
     );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  Pure render function — reads no React state, only params
-// ─────────────────────────────────────────────────────────────────────────────
-
-function render(ctx: CanvasRenderingContext2D, p: CanvasRenderParams): void {
-    const { blocks, bays, bayIndexMap, scrollY, canvasW, canvasH, rowH, showDwell, drag } = p;
-    const gridW = canvasW - BAY_LABEL_W;
-    const pxPerMin = gridW / MINUTES;
-    const viewH = canvasH - HEADER_H;
-    const firstBay = Math.max(0, Math.floor(scrollY / rowH));
-    const lastBay = Math.min(bays.length - 1, Math.ceil((scrollY + viewH) / rowH));
-
-    ctx.clearRect(0, 0, canvasW, canvasH);
-
-    // ── Header ──────────────────────────────────────────────────────────────
-    drawHeader(ctx, canvasW, pxPerMin, showDwell);
-
-    // ── Clip scrollable region ───────────────────────────────────────────────
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, HEADER_H, canvasW, viewH);
-    ctx.clip();
-    ctx.translate(0, HEADER_H - scrollY);
-
-    // ── Rows ─────────────────────────────────────────────────────────────────
-    for (let i = firstBay; i <= lastBay; i++) {
-        drawRow(ctx, bays[i], i, canvasW, gridW, rowH, pxPerMin, showDwell);
-    }
-
-    // ── Blocks ───────────────────────────────────────────────────────────────
-    // Build effective blocks (apply live drag offset)
-    for (const block of blocks) {
-        const bayIdx = bayIndexMap.get(block.bayId);
-        if (bayIdx === undefined || bayIdx < firstBay || bayIdx > lastBay) continue;
-
-        let startMin = block.startMin;
-        let endMin = block.endMin;
-        let bayIdx2 = bayIdx;
-
-        if (drag && drag.block.item === block.item) {
-            startMin = drag.currentStart;
-            endMin = drag.currentEnd;
-            bayIdx2 = drag.currentBayIdx;
-            if (bayIdx2 < firstBay || bayIdx2 > lastBay) continue;
-        }
-
-        drawBlock(ctx, block, bayIdx2, startMin, endMin, rowH, pxPerMin, drag?.block.item === block.item);
-    }
-
-    ctx.restore();
-}
-
-function drawHeader(ctx: CanvasRenderingContext2D, canvasW: number, pxPerMin: number, showDwell: boolean): void {
-    ctx.fillStyle = C.headerBg;
-    ctx.fillRect(0, 0, canvasW, HEADER_H);
-
-    // Bay label column header
-    ctx.fillStyle = C.headerText;
-    ctx.font = "bold 11px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("Bay", BAY_LABEL_W / 2, HEADER_H / 2);
-
-    ctx.strokeStyle = C.headerBorder;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, HEADER_H - 0.5);
-    ctx.lineTo(canvasW, HEADER_H - 0.5);
-    ctx.stroke();
-
-    ctx.font = "10px sans-serif";
-    ctx.textAlign = "center";
-
-    for (let h = 0; h <= 24; h++) {
-        const x = BAY_LABEL_W + h * 60 * pxPerMin;
-        ctx.strokeStyle = C.gridMajor;
-        ctx.lineWidth = h % 6 === 0 ? 1 : 0.5;
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, HEADER_H - 1);
-        ctx.stroke();
-        if (h < 24) {
-            ctx.fillStyle = C.headerText;
-            ctx.fillText(`${String(h).padStart(2, "0")}:00`, x + 30 * pxPerMin, HEADER_H / 2);
-        }
-    }
-
-    if (showDwell) {
-        // 25-min minor ticks in header
-        ctx.strokeStyle = C.gridMinor;
-        ctx.lineWidth = 0.5;
-        for (let m = 25; m < MINUTES; m += 25) {
-            if (m % 60 === 0) continue;
-            const x = BAY_LABEL_W + m * pxPerMin;
-            ctx.beginPath();
-            ctx.moveTo(x, HEADER_H - 8);
-            ctx.lineTo(x, HEADER_H - 1);
-            ctx.stroke();
-        }
-    }
-}
-
-function drawRow(
-    ctx: CanvasRenderingContext2D,
-    bayId: string,
-    bayIdx: number,
-    canvasW: number,
-    _gridW: number,
-    rowH: number,
-    pxPerMin: number,
-    showDwell: boolean
-): void {
-    const y = bayIdx * rowH;
-
-    // Row background
-    ctx.fillStyle = bayIdx % 2 === 0 ? C.rowEven : C.rowOdd;
-    ctx.fillRect(0, y, canvasW, rowH);
-
-    // 25-min dwell shading
-    if (showDwell) {
-        ctx.fillStyle = C.dwellShade;
-        for (let m = 0; m < MINUTES; m += 50) {
-            ctx.fillRect(BAY_LABEL_W + m * pxPerMin, y, 25 * pxPerMin, rowH);
-        }
-    }
-
-    // Major hour gridlines
-    ctx.strokeStyle = C.gridMajor;
-    ctx.lineWidth = 0.5;
-    for (let h = 0; h <= 24; h++) {
-        const x = BAY_LABEL_W + h * 60 * pxPerMin;
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x, y + rowH);
-        ctx.stroke();
-    }
-
-    // Row bottom border
-    ctx.strokeStyle = C.rowBorder;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, y + rowH - 0.5);
-    ctx.lineTo(canvasW, y + rowH - 0.5);
-    ctx.stroke();
-
-    // Bay label
-    ctx.fillStyle = C.labelText;
-    ctx.font = "11px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    // Clip label to bay label column
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, y, BAY_LABEL_W - 2, rowH);
-    ctx.clip();
-    ctx.fillText(bayId, BAY_LABEL_W / 2, y + rowH / 2);
-    ctx.restore();
-}
-
-function drawBlock(
-    ctx: CanvasRenderingContext2D,
-    block: ScheduleBlock,
-    bayIdx: number,
-    startMin: number,
-    endMin: number,
-    rowH: number,
-    pxPerMin: number,
-    isDragging: boolean
-): void {
-    const bx = BAY_LABEL_W + startMin * pxPerMin;
-    const bw = Math.max(2, (endMin - startMin) * pxPerMin);
-    const by = bayIdx * rowH + 2;
-    const bh = rowH - 4;
-
-    if (bw < 1 || bh < 1) return;
-
-    // Pick fill color
-    let fill: string;
-    if (block.color) {
-        fill = block.color;
-    } else if (block.isConflict) {
-        fill = C.blockConflict;
-    } else {
-        const s = (block.status ?? "").toLowerCase();
-        if (s === "inprogress" || s === "in progress") fill = C.blockInProgress;
-        else if (s === "completed" || s === "done") fill = C.blockCompleted;
-        else fill = C.blockScheduled;
-    }
-
-    ctx.globalAlpha = isDragging ? 0.75 : 1;
-
-    // Rounded rect
-    const r = Math.min(3, bh / 2, bw / 2);
-    ctx.beginPath();
-    ctx.moveTo(bx + r, by);
-    ctx.lineTo(bx + bw - r, by);
-    ctx.arcTo(bx + bw, by, bx + bw, by + r, r);
-    ctx.lineTo(bx + bw, by + bh - r);
-    ctx.arcTo(bx + bw, by + bh, bx + bw - r, by + bh, r);
-    ctx.lineTo(bx + r, by + bh);
-    ctx.arcTo(bx, by + bh, bx, by + bh - r, r);
-    ctx.lineTo(bx, by + r);
-    ctx.arcTo(bx, by, bx + r, by, r);
-    ctx.closePath();
-
-    ctx.fillStyle = fill;
-    ctx.fill();
-
-    // Conflict: extra red border overlay
-    if (block.isConflict) {
-        ctx.strokeStyle = "#b71c1c";
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-    }
-
-    // Resize handles
-    if (bw > RESIZE_HIT * 2 + 4) {
-        ctx.fillStyle = C.blockEdge;
-        ctx.fillRect(bx, by, RESIZE_HIT, bh);
-        ctx.fillRect(bx + bw - RESIZE_HIT, by, RESIZE_HIT, bh);
-    }
-
-    // Label text (only if block is wide enough)
-    if (bw > 22 && bh > 8) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(bx + RESIZE_HIT, by, bw - RESIZE_HIT * 2, bh);
-        ctx.clip();
-        ctx.fillStyle = C.blockText;
-        ctx.font = `${Math.min(11, bh - 4)}px sans-serif`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(block.truckId, bx + bw / 2, by + bh / 2);
-        ctx.restore();
-    }
-
-    ctx.globalAlpha = 1;
 }

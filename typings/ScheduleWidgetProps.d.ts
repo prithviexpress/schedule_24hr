@@ -18,12 +18,15 @@ export interface ScheduleWidgetContainerProps {
     endTimeAttr: ListAttributeValue<Date>;
     statusAttr?: ListAttributeValue<string>;
     colorAttr?: ListAttributeValue<string>;
+    groupIdAttr?: ListAttributeValue<string>;
     displayDate?: EditableValue<Date | string>;
     onTruckClick?: ListActionValue;
     onScheduleChange?: ListActionValue;
     onEmptySlotClick?: ActionValue;
     onExcelImport?: ActionValue;
     rowHeight: number;
+    timeRangeStart: number;
+    timeRangeEnd: number;
     showDwellMarkers: boolean;
     defaultDwellMinutes: number;
 }
@@ -46,12 +49,15 @@ export interface ScheduleWidgetPreviewProps {
     endTimeAttr: string;
     statusAttr: string;
     colorAttr: string;
+    groupIdAttr: string;
     displayDate: string;
     onTruckClick: {} | null;
     onScheduleChange: {} | null;
     onEmptySlotClick: {} | null;
     onExcelImport: {} | null;
     rowHeight: number | null;
+    timeRangeStart: number | null;
+    timeRangeEnd: number | null;
     showDwellMarkers: boolean;
     defaultDwellMinutes: number | null;
 }

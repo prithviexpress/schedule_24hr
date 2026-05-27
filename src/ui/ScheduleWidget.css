@@ -1,4 +1,4 @@
-/* TruckScheduler24Hr widget styles */
+/* TruckScheduler24Hr widget styles — cream/beige professional palette */
 
 .truck-scheduler {
     display: flex;
@@ -9,8 +9,8 @@
     font-size: 13px;
     box-sizing: border-box;
     overflow: hidden;
-    background: #fff;
-    border: 1px solid #e0e0e0;
+    background: #f5f2ed;
+    border: 1px solid #d8d5cf;
     border-radius: 4px;
 }
 
@@ -21,8 +21,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 6px 12px;
-    background: #fafafa;
-    border-bottom: 1px solid #e0e0e0;
+    background: #eeeae4;
+    border-bottom: 1px solid #d8d5cf;
     flex-shrink: 0;
     gap: 12px;
     flex-wrap: wrap;
@@ -36,20 +36,20 @@
 }
 
 .truck-scheduler__nav-btn {
-    background: #fff;
-    border: 1px solid #ccc;
+    background: #f5f2ed;
+    border: 1px solid #c8c4bc;
     border-radius: 4px;
     padding: 4px 10px;
     cursor: pointer;
     font-size: 16px;
     line-height: 1;
     transition: background 0.15s, border-color 0.15s;
-    color: #333;
+    color: #444;
 }
 
 .truck-scheduler__nav-btn:hover {
-    background: #f0f0f0;
-    border-color: #999;
+    background: #e8e4de;
+    border-color: #aaa8a0;
 }
 
 .truck-scheduler__date-label {
@@ -73,7 +73,7 @@
     align-items: center;
     gap: 10px;
     font-size: 11px;
-    color: #555;
+    color: #666;
 }
 
 .truck-scheduler__legend-item {
@@ -96,11 +96,11 @@
     align-items: center;
     gap: 6px;
     padding: 5px 12px;
-    border: 2px dashed #aaa;
+    border: 2px dashed #b8b4ac;
     border-radius: 5px;
     cursor: pointer;
-    background: #fff;
-    color: #555;
+    background: #f5f2ed;
+    color: #666;
     font-size: 12px;
     transition: border-color 0.2s, background 0.2s, color 0.2s;
     user-select: none;
@@ -109,9 +109,9 @@
 
 .excel-upload:hover,
 .excel-upload--drag-over {
-    border-color: #4a90d9;
-    background: #eaf4ff;
-    color: #1a6bb5;
+    border-color: #8a7e6a;
+    background: #ece8e1;
+    color: #333;
 }
 
 .excel-upload--parsing {
@@ -132,7 +132,7 @@
 }
 
 .truck-scheduler__preview-modal {
-    background: #fff;
+    background: #faf8f5;
     border-radius: 8px;
     padding: 20px 24px;
     max-width: 680px;
@@ -141,13 +141,15 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+    border: 1px solid #d8d5cf;
 }
 
 .truck-scheduler__preview-modal h3 {
     margin: 0;
     font-size: 15px;
     font-weight: 600;
+    color: #222;
 }
 
 .truck-scheduler__preview-table-wrap {
@@ -164,25 +166,26 @@
 .truck-scheduler__preview-table th,
 .truck-scheduler__preview-table td {
     padding: 5px 8px;
-    border: 1px solid #e0e0e0;
+    border: 1px solid #dddbd5;
     text-align: left;
     white-space: nowrap;
 }
 
 .truck-scheduler__preview-table th {
-    background: #f5f5f5;
+    background: #eeebe5;
     font-weight: 600;
     position: sticky;
     top: 0;
+    color: #333;
 }
 
 .truck-scheduler__preview-table tr:nth-child(even) td {
-    background: #fafafa;
+    background: #f7f5f2;
 }
 
 .truck-scheduler__preview-table .row--error td {
-    background: #fff3f3;
-    color: #c62828;
+    background: #fff0f0;
+    color: #b71c1c;
 }
 
 .truck-scheduler__preview-actions {
@@ -194,7 +197,7 @@
 .truck-scheduler__btn {
     padding: 7px 16px;
     border-radius: 4px;
-    border: 1px solid #ccc;
+    border: 1px solid #c8c4bc;
     cursor: pointer;
     font-size: 13px;
     font-weight: 500;
@@ -202,27 +205,27 @@
 }
 
 .truck-scheduler__btn--primary {
-    background: #4a90d9;
-    border-color: #3a7bc8;
+    background: #8a7e6a;
+    border-color: #7a6e5a;
     color: #fff;
 }
 
 .truck-scheduler__btn--primary:hover {
-    background: #3a7bc8;
+    background: #7a6e5a;
 }
 
 .truck-scheduler__btn--secondary {
-    background: #fff;
+    background: #f5f2ed;
     color: #444;
 }
 
 .truck-scheduler__btn--secondary:hover {
-    background: #f0f0f0;
+    background: #e8e4de;
 }
 
 .truck-scheduler__import-count {
     font-size: 12px;
-    color: #555;
+    color: #666;
 }
 
 /* ─── Canvas container ───────────────────────────────────────────────── */
@@ -231,7 +234,7 @@
     flex: 1;
     position: relative;
     overflow: hidden;
-    background: #fff;
+    background: #f5f2ed;
 }
 
 .truck-scheduler__canvas-container {
@@ -253,8 +256,8 @@
     right: 0;
     width: 10px;
     height: 100%;
-    background: #f0f0f0;
-    border-left: 1px solid #e0e0e0;
+    background: #e8e4de;
+    border-left: 1px solid #d8d5cf;
     cursor: pointer;
     user-select: none;
 }
@@ -263,14 +266,14 @@
     position: absolute;
     width: 8px;
     left: 1px;
-    background: #bbb;
+    background: #bbb8b2;
     border-radius: 4px;
     transition: background 0.15s;
 }
 
 .truck-scheduler__scrollbar-thumb:hover,
 .truck-scheduler__scrollbar-thumb--active {
-    background: #888;
+    background: #888580;
 }
 
 /* ─── Loading state ──────────────────────────────────────────────────── */
@@ -280,14 +283,15 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: rgba(255, 255, 255, 0.9);
+    background: rgba(245, 242, 237, 0.92);
     padding: 14px 22px;
     border-radius: 6px;
     color: #444;
     font-weight: 500;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
     pointer-events: none;
     z-index: 10;
+    border: 1px solid #d8d5cf;
 }
 
 /* ─── Error / empty state ────────────────────────────────────────────── */
@@ -297,7 +301,9 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    color: #999;
+    color: #aaa8a0;
     font-size: 13px;
     pointer-events: none;
+    text-align: center;
+    max-width: 360px;
 }

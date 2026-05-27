@@ -72,6 +72,15 @@
                 </attributeTypes>
             </property>
 
+            <property key="groupIdAttr" type="attribute" dataSource="scheduleData" required="false">
+                <caption>Group / Terminal</caption>
+                <description>Optional string attribute to group bays into collapsible sections (e.g. Terminal, Zone). All bays go to one unnamed group if not set.</description>
+                <attributeTypes>
+                    <attributeType name="String"/>
+                    <attributeType name="Enum"/>
+                </attributeTypes>
+            </property>
+
             <property key="displayDate" type="attribute" required="false">
                 <caption>Display Date</caption>
                 <description>DateTime attribute controlling which day's schedule is shown. Defaults to today when empty.</description>
@@ -114,6 +123,16 @@
             <property key="rowHeight" type="integer" defaultValue="30" required="true">
                 <caption>Row Height (px)</caption>
                 <description>Pixel height of each bay row in the grid. Default 30. Increase for touch devices.</description>
+            </property>
+
+            <property key="timeRangeStart" type="integer" defaultValue="0" required="true">
+                <caption>Time Range Start (hour 0-23)</caption>
+                <description>First hour shown on timeline. 0 = midnight. Set to 6 for 06:00 start.</description>
+            </property>
+
+            <property key="timeRangeEnd" type="integer" defaultValue="24" required="true">
+                <caption>Time Range End (hour 1-24)</caption>
+                <description>Last hour shown on timeline. 24 = midnight. Set to 18 for 18:00 end.</description>
             </property>
 
             <property key="showDwellMarkers" type="boolean" defaultValue="true" required="true">

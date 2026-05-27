@@ -46,9 +46,9 @@ export function Toolbar({ displayDay, onDayChange, onExcelImport, onImportError 
 function Legend(): ReactElement {
     return (
         <div className="truck-scheduler__legend">
-            <LegendItem color="#4a90d9" label="Scheduled" />
-            <LegendItem color="#f57c00" label="In Progress" />
-            <LegendItem color="#43a047" label="Completed" />
+            <LegendItem color="#f5c518" label="Scheduled" />
+            <LegendItem color="#7ec87e" label="In Progress" />
+            <LegendItem color="#404040" label="Completed" />
             <LegendItem color="#e53935" label="Conflict" />
         </div>
     );
