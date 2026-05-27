@@ -10,7 +10,7 @@
 
     <name>Truck Scheduler 24Hr</name>
     <description>24-hour truck scheduling Gantt grid across dynamically-defined loading bays. Supports drag/move/resize, Excel import, and conflict highlighting.</description>
-    <studioProCategory>Logistics</studioProCategory>
+    <studioProCategory>Add-ons</studioProCategory>
 
     <properties>
 
