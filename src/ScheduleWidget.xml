@@ -111,17 +111,17 @@
         <!-- ═══════════ DISPLAY ═══════════ -->
         <propertyGroup caption="Display">
 
-            <property key="rowHeight" type="integer" defaultValue="30" required="false">
+            <property key="rowHeight" type="integer" defaultValue="30" required="true">
                 <caption>Row Height (px)</caption>
                 <description>Pixel height of each bay row in the grid. Default 30. Increase for touch devices.</description>
             </property>
 
-            <property key="showDwellMarkers" type="boolean" defaultValue="true" required="false">
+            <property key="showDwellMarkers" type="boolean" defaultValue="true" required="true">
                 <caption>Show 25-Minute Dwell Markers</caption>
                 <description>When enabled, faint vertical lines appear every 25 minutes — matching average dwell time — to help with visual slot estimation.</description>
             </property>
 
-            <property key="defaultDwellMinutes" type="integer" defaultValue="25" required="false">
+            <property key="defaultDwellMinutes" type="integer" defaultValue="25" required="true">
                 <caption>Default Dwell Duration (minutes)</caption>
                 <description>Duration used for new truck blocks created by clicking an empty slot. Default 25 minutes.</description>
             </property>
