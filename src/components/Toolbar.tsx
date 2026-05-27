@@ -1,12 +1,8 @@
 import { ReactElement } from "react";
-import { ExcelUpload } from "./ExcelUpload";
-import { ExcelRow } from "./types";
 
 interface ToolbarProps {
     displayDay: Date;
     onDayChange: (d: Date) => void;
-    onExcelImport: (rows: ExcelRow[]) => void;
-    onImportError: (msg: string) => void;
 }
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -22,7 +18,7 @@ function shiftDay(d: Date, delta: number): Date {
     return n;
 }
 
-export function Toolbar({ displayDay, onDayChange, onExcelImport, onImportError }: ToolbarProps): ReactElement {
+export function Toolbar({ displayDay, onDayChange }: ToolbarProps): ReactElement {
     return (
         <div className="truck-scheduler__toolbar">
             <div className="truck-scheduler__date-nav">
@@ -35,10 +31,7 @@ export function Toolbar({ displayDay, onDayChange, onExcelImport, onImportError 
                 </button>
             </div>
 
-            <div className="truck-scheduler__toolbar-right">
-                <Legend />
-                <ExcelUpload onConfirmed={onExcelImport} onError={onImportError} />
-            </div>
+            <Legend />
         </div>
     );
 }

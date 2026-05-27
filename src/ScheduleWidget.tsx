@@ -3,7 +3,7 @@ import { ObjectItem } from "mendix";
 import { ScheduleWidgetContainerProps } from "../typings/ScheduleWidgetProps";
 import { SchedulerCanvas } from "./components/SchedulerCanvas";
 import { Toolbar } from "./components/Toolbar";
-import { ScheduleBlock, BayGroup, ExcelRow, PendingEdit, NewSlot } from "./components/types";
+import { ScheduleBlock, BayGroup, PendingEdit, NewSlot } from "./components/types";
 import "./ui/ScheduleWidget.css";
 
 export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElement {
@@ -20,7 +20,6 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         onTruckClick,
         onScheduleChange,
         onEmptySlotClick,
-        onExcelImport,
         rowHeight,
         showDwellMarkers,
         defaultDwellMinutes,
@@ -157,19 +156,6 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         [onEmptySlotClick, displayDay]
     );
 
-    // ── Excel import ──────────────────────────────────────────────────────────
-    const handleExcelImport = useCallback(
-        (rows: ExcelRow[]) => {
-            window.__TruckSchedulerImportRows = rows;
-            if (onExcelImport?.canExecute) onExcelImport.execute();
-        },
-        [onExcelImport]
-    );
-
-    const handleImportError = useCallback((msg: string) => {
-        console.error("[TruckScheduler24Hr] Import error:", msg);
-    }, []);
-
     // ── Render ────────────────────────────────────────────────────────────────
     const isLoading = scheduleData.status === "loading";
     const isEmpty = scheduleData.status === "available" && blocks.length === 0;
@@ -183,15 +169,13 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
             <Toolbar
                 displayDay={displayDay}
                 onDayChange={handleDayChange}
-                onExcelImport={handleExcelImport}
-                onImportError={handleImportError}
             />
 
             <div className="truck-scheduler__canvas-wrapper">
                 {isLoading && <div className="truck-scheduler__loading">Loading schedule…</div>}
                 {isEmpty && !isLoading && (
                     <div className="truck-scheduler__empty">
-                        No schedule entries for this day. Upload an Excel file or click a bay slot to add a truck.
+                        No schedule entries for this day. Click a bay slot to add a truck.
                     </div>
                 )}
                 <SchedulerCanvas

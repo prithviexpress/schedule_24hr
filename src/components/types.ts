@@ -18,14 +18,6 @@ export interface BayGroup {
     bays: string[];
 }
 
-export interface ExcelRow {
-    truckId: string;
-    bayId: string;
-    startTime: string;  // ISO string
-    endTime: string;    // ISO string
-    status: string;
-}
-
 export interface PendingEdit {
     newStartISO: string;
     newEndISO: string;
@@ -42,6 +34,5 @@ declare global {
     interface Window {
         __TruckSchedulerPendingEdit?: PendingEdit;
         __TruckSchedulerNewSlot?: NewSlot;
-        __TruckSchedulerImportRows?: ExcelRow[];
     }
 }

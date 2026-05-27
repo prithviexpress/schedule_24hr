@@ -23,7 +23,6 @@ export interface ScheduleWidgetContainerProps {
     onTruckClick?: ListActionValue;
     onScheduleChange?: ListActionValue;
     onEmptySlotClick?: ActionValue;
-    onExcelImport?: ActionValue;
     rowHeight: number;
     timeRangeStart: number;
     timeRangeEnd: number;
@@ -54,7 +53,6 @@ export interface ScheduleWidgetPreviewProps {
     onTruckClick: {} | null;
     onScheduleChange: {} | null;
     onEmptySlotClick: {} | null;
-    onExcelImport: {} | null;
     rowHeight: number | null;
     timeRangeStart: number | null;
     timeRangeEnd: number | null;

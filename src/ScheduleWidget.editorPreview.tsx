@@ -34,7 +34,6 @@ export function preview(_props: ScheduleWidgetPreviewProps): ReactElement {
                 <span>‹</span>
                 <strong style={{ flex: 1, textAlign: "center" }}>Truck Scheduler 24Hr</strong>
                 <span>›</span>
-                <span style={{ background: "#4a90d9", color: "#fff", padding: "2px 6px", borderRadius: 3 }}>Upload Excel</span>
             </div>
 
             {/* Mini grid preview */}

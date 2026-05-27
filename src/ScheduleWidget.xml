@@ -110,11 +110,6 @@
                 <description>Action triggered when the user clicks an empty bay-time slot. window.__TruckSchedulerNewSlot is set to {bayId, startISO, endISO} before firing. Wire to a nanoflow that creates a new TruckSchedule object.</description>
             </property>
 
-            <property key="onExcelImport" type="action" required="false">
-                <caption>On Excel Import</caption>
-                <description>Action triggered after Excel rows are parsed and validated. window.__TruckSchedulerImportRows contains the parsed array. Wire to a nanoflow / JavaScript Action that creates TruckSchedule objects from the import data.</description>
-            </property>
-
         </propertyGroup>
 
         <!-- ═══════════ DISPLAY ═══════════ -->
