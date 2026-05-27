@@ -205,7 +205,7 @@ function startOfDay(d: Date): number {
     return c.getTime();
 }
 
-export function detectConflicts(blocks: ScheduleBlock[]): ScheduleBlock[] {
+function detectConflicts(blocks: ScheduleBlock[]): ScheduleBlock[] {
     const byBay = new Map<string, ScheduleBlock[]>();
     for (const b of blocks) {
         const arr = byBay.get(b.bayId);
@@ -236,7 +236,7 @@ export function detectConflicts(blocks: ScheduleBlock[]): ScheduleBlock[] {
 }
 
 // Natural sort: "Bay-2" < "Bay-10" < "Bay-20"
-export function naturalCompare(a: string, b: string): number {
+function naturalCompare(a: string, b: string): number {
     const re = /(\d+)/g;
     const pa = a.split(re);
     const pb = b.split(re);
