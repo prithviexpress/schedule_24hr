@@ -23,9 +23,9 @@ export interface ScheduleWidgetContainerProps {
     onScheduleChange?: ListActionValue;
     onEmptySlotClick?: ActionValue;
     onExcelImport?: ActionValue;
-    rowHeight?: number;
-    showDwellMarkers?: boolean;
-    defaultDwellMinutes?: number;
+    rowHeight: number;
+    showDwellMarkers: boolean;
+    defaultDwellMinutes: number;
 }
 
 export interface ScheduleWidgetPreviewProps {
