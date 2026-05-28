@@ -13,6 +13,12 @@
 // 3. Terser removed from ES build:
 //    Minified single-line output can trip Studio Pro's ES module validator.
 //    AMD stays minified for production.
+//
+// 4. Output path flattened for AMD + ES:
+//    pluggable-widgets-tools emits to com/prithvi/schedulewidget/ScheduleWidget.{js,mjs}
+//    but Mendix 11.7 derives the AMD module path directly from the widget id
+//    (com.prithvi.ScheduleWidget → widgets/com/prithvi/ScheduleWidget.js).
+//    Removing the lowercase widget subdirectory makes the paths align.
 export default async function (args) {
     const defaults = args.configDefaultConfig;
     if (!defaults) return {};
@@ -23,16 +29,24 @@ export default async function (args) {
 
         const withoutBabelOutput = (config.plugins || []).filter(p => p?.name !== "babel");
 
+        // Flatten: remove the auto-generated lowercase widget subdirectory so
+        // the output file sits directly under the package path directory.
+        const flatFile = config.output?.file?.replace(
+            /[/\\]schedulewidget[/\\]ScheduleWidget\./,
+            "/ScheduleWidget."
+        );
+        const flatOutput = flatFile ? { ...config.output, file: flatFile } : config.output;
+
         if (format === "es") {
             return {
                 ...config,
+                output: flatOutput,
                 // Bundle everything — no external imports in the .mjs
                 external: [],
                 plugins: withoutBabelOutput.filter(p => p?.name !== "terser")
             };
         }
 
-        return { ...config, plugins: withoutBabelOutput };
+        return { ...config, output: flatOutput, plugins: withoutBabelOutput };
     });
 }
-
