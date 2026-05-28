@@ -7,4 +7,4 @@ const SummaryPos = {
     BottomLeft: 5
 };
 
-export default SummaryPos
+export default SummaryPos;

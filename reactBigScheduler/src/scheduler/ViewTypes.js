@@ -9,4 +9,4 @@ const ViewTypes = {
     Custom2: 7
 };
 
-export default ViewTypes
+export default ViewTypes;

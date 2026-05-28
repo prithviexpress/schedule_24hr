@@ -6,4 +6,4 @@ const CellUnits = {
     Year: 4
 };
 
-export default CellUnits
+export default CellUnits;
