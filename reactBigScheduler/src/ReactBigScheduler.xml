@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="utf-8"?>
+<widget id="mendix.reactbigscheduler.ReactBigScheduler" pluginWidget="true" needsEntityContext="true" offlineCapable="true"
+        supportedPlatform="Web"
+        xmlns="http://www.mendix.com/widget/1.0/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.mendix.com/widget/1.0/ ../node_modules/mendix/custom_widget.xsd">
+    <name>React Big Scheduler</name>
+    <description>My widget description</description>
+    <icon/>
+    <properties>
+        <propertyGroup caption="Resources">
+            <property key="resources" type="datasource" isList="true" required="true">
+                <caption>Resource source</caption>
+                <description/>
+            </property>
+            <property key="resourceLabel" type="attribute" dataSource="resources" required="true">
+                <caption>Resource label</caption>
+                <description/>
+                <attributeTypes>
+                    <attributeType name="String" />
+                </attributeTypes>
+            </property>
+            <property key="resourceId" type="attribute" dataSource="resources" required="true">
+                <caption>Resource ID</caption>
+                <description/>
+                <attributeTypes>
+                    <attributeType name="AutoNumber" />
+                </attributeTypes>
+            </property>
+            <property key="groupOnly" type="attribute" dataSource="resources" required="true">
+                <caption>Resource group</caption>
+                <description/>
+                <attributeTypes>
+                    <attributeType name="Boolean" />
+                </attributeTypes>
+            </property>
+            <property key="parentID" type="attribute" dataSource="resources" required="true">
+                <caption>Resource Parent ID</caption>
+                <description/>
+                <attributeTypes>
+                    <attributeType name="Long" />
+                </attributeTypes>
+            </property>
+        </propertyGroup>
+        <propertyGroup caption="Events">
+            <property key="events" type="datasource" isList="true" required="true">
+                <caption>Events source</caption>
+                <description/>
+            </property>
+            <property key="eventResource" type="attribute" dataSource="events" required="true">
+                <caption>Event Resource ID</caption>
+                <description/>
+                <attributeTypes>
+                    <attributeType name="Long" />
+                </attributeTypes>
+            </property>
+            <property key="eventsId" type="attribute" dataSource="events" required="true">
+                <caption>Event ID</caption>
+                <description/>
+                <attributeTypes>
+                    <attributeType name="Long" />
+                </attributeTypes>
+            </property>
+            <property key="eventLabel" type="attribute" dataSource="events" required="true">
+                <caption>Event Label</caption>
+                <description/>
+                <attributeTypes>
+                    <attributeType name="String" />
+                </attributeTypes>
+            </property>
+            <property key="eventStart" type="attribute" dataSource="events" required="true">
+                <caption>Event Start Date</caption>
+                <description/>
+                <attributeTypes>
+                    <attributeType name="DateTime" />
+                </attributeTypes>
+            </property>
+            <property key="eventEnd" type="attribute" dataSource="events" required="true">
+                <caption>Event End Date</caption>
+                <description/>
+                <attributeTypes>
+                    <attributeType name="DateTime" />
+                </attributeTypes>
+            </property>
+            <property key="onEventChange" type="action" required="true">
+                <caption>On change of event</caption>
+                <description/>
+            </property>
+            <property key="widgetActions" type="attribute" onChange="onEventChange" required="true">
+                <caption>Event Change Helper</caption>
+                <description/>
+                <attributeTypes>
+                    <attributeType name="String" />
+                </attributeTypes>
+            </property>
+        </propertyGroup>
+        <propertyGroup caption="Event Design">
+            <property key="showPopover" type="attribute" dataSource="events" required="true">
+                <caption>Event Show Popover?</caption>
+                <description/>
+                <attributeTypes>
+                    <attributeType name="Boolean" />
+                </attributeTypes>
+            </property>
+            <property key="resizable" type="attribute" dataSource="events" required="true">
+                <caption>Resizeable Event?</caption>
+                <description/>
+                <attributeTypes>
+                    <attributeType name="Boolean" />
+                </attributeTypes>
+            </property>
+            <property key="moveable" type="attribute" dataSource="events" required="true">
+                <caption>Moveable Event?</caption>
+                <description/>
+                <attributeTypes>
+                    <attributeType name="Boolean" />
+                </attributeTypes>
+            </property>
+            <property key="startResizeable" type="attribute" dataSource="events" required="true">
+                <caption>Start Resizeable Event?</caption>
+                <description/>
+                <attributeTypes>
+                    <attributeType name="Boolean" />
+                </attributeTypes>
+            </property>
+            <property key="endResizeable" type="attribute" dataSource="events" required="true">
+                <caption>End Resizeable Event</caption>
+                <description/>
+                <attributeTypes>
+                    <attributeType name="Boolean" />
+                </attributeTypes>
+            </property>
+            <property key="eventColor" type="attribute" dataSource="events" required="true">
+                <caption>Event bg color</caption>
+                <description/>
+                <attributeTypes>
+                    <attributeType name="String" />
+                </attributeTypes>
+            </property>
+        </propertyGroup>
+        <propertyGroup caption="Calender Design">
+            <property key="startDate" type="attribute" required="true">
+                <caption>StartDate</caption>
+                <description/>
+                <attributeTypes>
+                    <attributeType name="DateTime" />
+                </attributeTypes>
+            </property>
+            <property key="endDate" type="attribute" required="true">
+                <caption>EndDate</caption>
+                <description>For Hour view, set StartDate and EndDate to the same calendar day (e.g. 2024-01-15 to 2024-01-16) to display a 24-hour timeline.</description>
+                <attributeTypes>
+                    <attributeType name="DateTime" />
+                </attributeTypes>
+            </property>
+            <property key="cellUnits" type="attribute" required="true">
+                <caption>CellUnit</caption>
+                <description>Controls the granularity of each grid column. Accepted values: "Hour" (each cell = 1 hour, ideal for a 24-hour day view), "Day", "Weeks", "Months".</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                </attributeTypes>
+            </property>
+            <property key="weekend" type="attribute" required="true">
+                <caption>Weekend</caption>
+                <description/>
+                <attributeTypes>
+                    <attributeType name="String" />
+                </attributeTypes>
+            </property>
+        </propertyGroup>
+    </properties>
+</widget>
