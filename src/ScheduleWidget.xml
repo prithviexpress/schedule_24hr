@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<widget id="com.prithvi.TruckScheduler24Hr"
+<widget id="com.prithvi.ScheduleWidget"
         pluginWidget="true"
         needsEntityContext="false"
         supportedPlatform="Web"
