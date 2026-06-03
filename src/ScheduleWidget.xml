@@ -72,6 +72,14 @@
                 </attributeTypes>
             </property>
 
+            <property key="tooltipAttr" type="attribute" dataSource="scheduleData" required="false">
+                <caption>Tooltip Text</caption>
+                <description>Optional attribute to display extra information in the hover tooltip for each truck block (e.g. driver name, cargo type).</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                </attributeTypes>
+            </property>
+
             <property key="groupIdAttr" type="attribute" dataSource="scheduleData" required="false">
                 <caption>Group / Terminal</caption>
                 <description>Optional string attribute to group bays into collapsible sections (e.g. Terminal, Zone). All bays go to one unnamed group if not set.</description>

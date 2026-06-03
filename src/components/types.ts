@@ -10,6 +10,7 @@ export interface ScheduleBlock {
     status: string;
     color: string;
     isConflict: boolean;
+    tooltipText?: string;
 }
 
 export interface BayGroup {

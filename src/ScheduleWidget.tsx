@@ -15,6 +15,7 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         endTimeAttr,
         statusAttr,
         colorAttr,
+        tooltipAttr,
         groupIdAttr,
         displayDate,
         onTruckClick,
@@ -32,6 +33,7 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
 
     const [localDisplayDay, setLocalDisplayDay] = useState<Date>(() => new Date());
     const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+    const [hiddenGroupIds, setHiddenGroupIds] = useState<Set<string>>(new Set());
 
     // Resolve which day to display
     const displayDay: Date = useMemo(() => {
@@ -55,6 +57,7 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
             const endDate = endTimeAttr.get(item).value as Date | undefined;
             const status = (statusAttr?.get(item).value as string) ?? "Scheduled";
             const color = (colorAttr?.get(item).value as string) ?? "";
+            const tooltipText = (tooltipAttr?.get(item).value as string) ?? "";
             const groupId = (groupIdAttr?.get(item).value as string) ?? "__default__";
 
             if (!startDate || !endDate || !bayId) return [];
@@ -66,9 +69,9 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
             const startMin = Math.max(0, (startDate.getTime() - dayStart) / 60000);
             const endMin = Math.min(1440, (endDate.getTime() - dayStart) / 60000);
 
-            return [{ item, truckId, bayId, groupId, startMin, endMin, status, color, isConflict: false }];
+            return [{ item, truckId, bayId, groupId, startMin, endMin, status, color, isConflict: false, tooltipText }];
         });
-    }, [scheduleData.status, scheduleData.items, displayDay, truckIdAttr, bayIdAttr, startTimeAttr, endTimeAttr, statusAttr, colorAttr, groupIdAttr]);
+    }, [scheduleData.status, scheduleData.items, displayDay, truckIdAttr, bayIdAttr, startTimeAttr, endTimeAttr, statusAttr, colorAttr, tooltipAttr, groupIdAttr]);
 
     // ── Conflict detection ────────────────────────────────────────────────────
     const blocks: ScheduleBlock[] = useMemo(() => detectConflicts(rawBlocks), [rawBlocks]);
@@ -91,6 +94,17 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
             bays: [...v.bays].sort((a, b) => naturalCompare(a, b))
         }));
     }, [blocks]);
+
+    // ── Group filter ──────────────────────────────────────────────────────────
+    const filteredGroups = useMemo(() => {
+        if (hiddenGroupIds.size === 0) return groups;
+        return groups.filter(g => !hiddenGroupIds.has(g.id));
+    }, [groups, hiddenGroupIds]);
+
+    const filteredBlocks = useMemo(() => {
+        if (hiddenGroupIds.size === 0) return blocks;
+        return blocks.filter(b => !hiddenGroupIds.has(b.groupId));
+    }, [blocks, hiddenGroupIds]);
 
     // ── Group toggle ──────────────────────────────────────────────────────────
     const handleGroupToggle = useCallback((groupId: string) => {
@@ -169,6 +183,9 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
             <Toolbar
                 displayDay={displayDay}
                 onDayChange={handleDayChange}
+                groups={groups}
+                hiddenGroupIds={hiddenGroupIds}
+                onHiddenChange={setHiddenGroupIds}
             />
 
             <div className="truck-scheduler__canvas-wrapper">
@@ -179,8 +196,8 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
                     </div>
                 )}
                 <SchedulerCanvas
-                    blocks={blocks}
-                    groups={groups}
+                    blocks={filteredBlocks}
+                    groups={filteredGroups}
                     collapsedGroups={collapsedGroups}
                     onGroupToggle={handleGroupToggle}
                     rowHeight={rowHeight ?? 30}

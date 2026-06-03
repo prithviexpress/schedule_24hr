@@ -1,4 +1,5 @@
 import {
+    CSSProperties,
     ReactElement,
     useCallback,
     useEffect,
@@ -54,6 +55,14 @@ const C = {
     scrollThumb: "#bbb8b2",
     scrollThumbHover: "#888",
 };
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatMinutes(m: number): string {
+    const h = Math.floor(m / 60) % 24;
+    const min = Math.floor(m % 60);
+    return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+}
 
 // ─── Internal types ───────────────────────────────────────────────────────────
 
@@ -554,6 +563,7 @@ export function SchedulerCanvas({
     const dragRef = useRef<DragState | null>(null);
     const rafRef = useRef<number>(0);
     const scrollThumbDragRef = useRef<{ startY: number; startScrollY: number } | null>(null);
+    const [hoverInfo, setHoverInfo] = useState<{ block: ScheduleBlock; clientX: number; clientY: number } | null>(null);
 
     const hasMultipleGroups = groups.length > 1 || (groups.length === 1 && groups[0]?.id !== "__default__");
 
@@ -692,6 +702,7 @@ export function SchedulerCanvas({
     const handleMouseDown = useCallback(
         (e: React.MouseEvent<HTMLCanvasElement>) => {
             if (e.button !== 0) return;
+            setHoverInfo(null);
             const { x, y } = canvasCoords(e);
 
             // Check group header click
@@ -735,14 +746,14 @@ export function SchedulerCanvas({
             const drag = dragRef.current;
 
             if (!drag) {
-                // Update cursor
                 const row = hitTestRow(y);
                 const canvas = canvasRef.current;
+                const hit = hitTestBlock(x, y);
+
                 if (canvas) {
                     if (row?.type === "group") {
                         canvas.style.cursor = "pointer";
                     } else {
-                        const hit = hitTestBlock(x, y);
                         canvas.style.cursor =
                             hit?.mode === "resize-left" || hit?.mode === "resize-right"
                                 ? "ew-resize"
@@ -750,6 +761,12 @@ export function SchedulerCanvas({
                                 ? "grab"
                                 : "default";
                     }
+                }
+
+                if (hit) {
+                    setHoverInfo({ block: hit.block, clientX: e.clientX, clientY: e.clientY });
+                } else {
+                    setHoverInfo(null);
                 }
                 return;
             }
@@ -838,6 +855,7 @@ export function SchedulerCanvas({
             dragRef.current = null;
         }
         if (canvasRef.current) canvasRef.current.style.cursor = "default";
+        setHoverInfo(null);
     }, [drawCanvas]);
 
     const handleWheel = useCallback(
@@ -888,6 +906,20 @@ export function SchedulerCanvas({
         [totalH, viewportH, thumbH, updateScrollY]
     );
 
+    // Tooltip position — flips left of cursor when near right edge
+    const tooltipStyle: CSSProperties | undefined = hoverInfo
+        ? {
+              position: "fixed",
+              left:
+                  hoverInfo.clientX + 16 + 240 > (typeof window !== "undefined" ? window.innerWidth : 9999)
+                      ? hoverInfo.clientX - 248
+                      : hoverInfo.clientX + 16,
+              top: Math.max(4, hoverInfo.clientY - 10),
+              zIndex: 9999,
+              pointerEvents: "none"
+          }
+        : undefined;
+
     return (
         <div
             ref={containerRef}
@@ -917,6 +949,24 @@ export function SchedulerCanvas({
                     onMouseDown={handleThumbMouseDown}
                 />
             </div>
+
+            {/* Hover tooltip */}
+            {hoverInfo && tooltipStyle && (
+                <div className="truck-scheduler__tooltip" style={tooltipStyle}>
+                    <div className="truck-scheduler__tooltip-title">{hoverInfo.block.truckId}</div>
+                    <div className="truck-scheduler__tooltip-row">Bay: {hoverInfo.block.bayId}</div>
+                    {hoverInfo.block.groupId !== "__default__" && (
+                        <div className="truck-scheduler__tooltip-row">Group: {hoverInfo.block.groupId}</div>
+                    )}
+                    <div className="truck-scheduler__tooltip-row">
+                        {formatMinutes(hoverInfo.block.startMin)} – {formatMinutes(hoverInfo.block.endMin)}
+                    </div>
+                    <div className="truck-scheduler__tooltip-row">Status: {hoverInfo.block.status}</div>
+                    {hoverInfo.block.tooltipText && (
+                        <div className="truck-scheduler__tooltip-extra">{hoverInfo.block.tooltipText}</div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
