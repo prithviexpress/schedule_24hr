@@ -4,5 +4,8 @@
         <widgetFiles>
             <widgetFile path="ScheduleWidget.xml"/>
         </widgetFiles>
+        <clientFiles>
+            <clientFile path="com/prithvi/schedulewidget/ScheduleWidget.js"/>
+        </clientFiles>
     </clientModule>
 </package>
