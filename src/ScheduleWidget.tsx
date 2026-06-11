@@ -15,7 +15,10 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         endTimeAttr,
         statusAttr,
         colorAttr,
+        bayStatusAttr,
         tooltipAttr,
+        tooltipAttr2,
+        tooltipAttr3,
         groupIdAttr,
         displayDate,
         onTruckClick,
@@ -57,7 +60,10 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
             const endDate = endTimeAttr.get(item).value as Date | undefined;
             const status = (statusAttr?.get(item).value as string) ?? "Scheduled";
             const color = (colorAttr?.get(item).value as string) ?? "";
+            const bayStatus = (bayStatusAttr?.get(item).value as string) ?? "";
             const tooltipText = (tooltipAttr?.get(item).value as string) ?? "";
+            const tooltipText2 = (tooltipAttr2?.get(item).value as string) ?? "";
+            const tooltipText3 = (tooltipAttr3?.get(item).value as string) ?? "";
             const groupId = (groupIdAttr?.get(item).value as string) ?? "__default__";
 
             if (!startDate || !endDate || !bayId) return [];
@@ -69,9 +75,9 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
             const startMin = Math.max(0, (startDate.getTime() - dayStart) / 60000);
             const endMin = Math.min(1440, (endDate.getTime() - dayStart) / 60000);
 
-            return [{ item, truckId, bayId, groupId, startMin, endMin, status, color, isConflict: false, tooltipText }];
+            return [{ item, truckId, bayId, groupId, startMin, endMin, status, color, isConflict: false, bayStatus, tooltipText, tooltipText2, tooltipText3 }];
         });
-    }, [scheduleData.status, scheduleData.items, displayDay, truckIdAttr, bayIdAttr, startTimeAttr, endTimeAttr, statusAttr, colorAttr, tooltipAttr, groupIdAttr]);
+    }, [scheduleData.status, scheduleData.items, displayDay, truckIdAttr, bayIdAttr, startTimeAttr, endTimeAttr, statusAttr, colorAttr, bayStatusAttr, tooltipAttr, tooltipAttr2, tooltipAttr3, groupIdAttr]);
 
     // ── Conflict detection ────────────────────────────────────────────────────
     const blocks: ScheduleBlock[] = useMemo(() => detectConflicts(rawBlocks), [rawBlocks]);
@@ -105,6 +111,15 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         if (hiddenGroupIds.size === 0) return blocks;
         return blocks.filter(b => !hiddenGroupIds.has(b.groupId));
     }, [blocks, hiddenGroupIds]);
+
+    // ── Bay status map: bayId → status (first non-empty value wins) ───────────
+    const bayStatusMap = useMemo(() => {
+        const m = new Map<string, string>();
+        for (const b of filteredBlocks) {
+            if (!m.has(b.bayId) && b.bayStatus) m.set(b.bayId, b.bayStatus);
+        }
+        return m;
+    }, [filteredBlocks]);
 
     // ── Group toggle ──────────────────────────────────────────────────────────
     const handleGroupToggle = useCallback((groupId: string) => {
@@ -200,6 +215,8 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
                     groups={filteredGroups}
                     collapsedGroups={collapsedGroups}
                     onGroupToggle={handleGroupToggle}
+                    bayStatusMap={bayStatusMap}
+                    displayDay={displayDay}
                     rowHeight={rowHeight ?? 30}
                     showDwellMarkers={showDwellMarkers ?? true}
                     defaultDwellMinutes={defaultDwellMinutes ?? 25}

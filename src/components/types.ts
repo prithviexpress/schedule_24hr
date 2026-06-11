@@ -10,7 +10,10 @@ export interface ScheduleBlock {
     status: string;
     color: string;
     isConflict: boolean;
+    bayStatus?: string;   // operational status of the bay (e.g. "available", "occupied", "maintenance")
     tooltipText?: string;
+    tooltipText2?: string;
+    tooltipText3?: string;
 }
 
 export interface BayGroup {

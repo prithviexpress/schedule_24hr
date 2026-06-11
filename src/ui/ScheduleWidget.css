@@ -203,12 +203,15 @@
 
 .truck-scheduler__tooltip-extra {
     display: block;
-    margin-top: 5px;
-    padding-top: 5px;
-    border-top: 1px solid rgba(255, 255, 255, 0.12);
     white-space: normal;
     word-break: break-word;
     color: #e0dcd6;
+}
+
+.truck-scheduler__tooltip-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.15);
+    margin: 5px 0 4px;
 }
 
 /* ─── Group filter ───────────────────────────────────────────────────── */

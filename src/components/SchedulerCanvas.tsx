@@ -17,6 +17,8 @@ const HEADER_H = 36;
 const SCROLLBAR_W = 10;
 const RESIZE_HIT = 6;
 const MIN_BLOCK_MIN = 1;
+const BAY_STATUS_DOT_R = 4;
+const BAY_STATUS_DOT_X = 9;  // x centre of the dot in label column
 
 // ─── Color palette ────────────────────────────────────────────────────────────
 const C = {
@@ -51,6 +53,9 @@ const C = {
     blockConflictText: "#ffffff",
     blockEdge: "rgba(0,0,0,0.18)",
 
+    nowLine: "rgba(229,57,53,0.7)",
+    nowPill: "#e53935",
+
     scrollTrack: "#e8e4de",
     scrollThumb: "#bbb8b2",
     scrollThumbHover: "#888",
@@ -64,6 +69,17 @@ function formatMinutes(m: number): string {
     return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
 }
 
+function bayStatusColor(status: string): string {
+    if (!status) return "";
+    const s = status.toLowerCase().trim();
+    if (s === "available" || s === "open" || s === "free" || s === "operational") return "#43a047";
+    if (s === "occupied" || s === "busy" || s === "inuse" || s === "in use" || s === "active" || s === "docked") return "#1e88e5";
+    if (s === "maintenance" || s === "closed" || s === "error" || s === "offline" || s === "outofservice") return "#e53935";
+    // Accept raw CSS colors (#hex, rgb, etc.)
+    if (s.startsWith("#") || s.startsWith("rgb")) return status;
+    return "#9e9e9e";
+}
+
 // ─── Internal types ───────────────────────────────────────────────────────────
 
 type DragMode = "move" | "resize-left" | "resize-right";
@@ -75,11 +91,11 @@ interface DragState {
     startY: number;
     origStart: number;
     origEnd: number;
-    origRowIdx: number;   // index in rows[] of the bay row where drag started
+    origRowIdx: number;
     pxPerMin: number;
     currentStart: number;
     currentEnd: number;
-    currentRowIdx: number; // index in rows[] of the bay row currently under cursor
+    currentRowIdx: number;
     moved: boolean;
 }
 
@@ -89,7 +105,7 @@ interface CanvasRow {
     label: string;
     y: number;
     h: number;
-    bayId?: string; // only for type === "bay"
+    bayId?: string;
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -99,11 +115,13 @@ export interface SchedulerCanvasProps {
     groups: BayGroup[];
     collapsedGroups: Set<string>;
     onGroupToggle: (groupId: string) => void;
+    bayStatusMap: Map<string, string>;
+    displayDay: Date;
     rowHeight: number;
     showDwellMarkers: boolean;
     defaultDwellMinutes: number;
-    timeRangeStart: number;   // 0-23
-    timeRangeEnd: number;     // 1-24
+    timeRangeStart: number;
+    timeRangeEnd: number;
     onTruckClick: (block: ScheduleBlock) => void;
     onScheduleChange: (block: ScheduleBlock, newStartMin: number, newEndMin: number) => void;
     onEmptySlotClick: (bayId: string, startMin: number, endMin: number, defaultDwell: number) => void;
@@ -121,7 +139,9 @@ function computeRows(
     let y = 0;
     for (const g of groups) {
         if (hasMultipleGroups || g.id !== "__default__") {
-            rows.push({ type: "group", groupId: g.id, label: g.label || g.id, y, h: GROUP_H });
+            // Fix: "__default__" should display as "Other", not the raw key
+            const label = g.id === "__default__" ? "Other" : (g.label || g.id);
+            rows.push({ type: "group", groupId: g.id, label, y, h: GROUP_H });
             y += GROUP_H;
         }
         if (!collapsedGroups.has(g.id)) {
@@ -136,36 +156,19 @@ function computeRows(
 
 // ─── Time coordinate helpers ──────────────────────────────────────────────────
 
-function minToX(
-    min: number,
-    rangeStart: number,
-    rangeEnd: number,
-    gridW: number
-): number {
+function minToX(min: number, rangeStart: number, rangeEnd: number, gridW: number): number {
     const rangeMins = (rangeEnd - rangeStart) * 60;
     return BAY_LABEL_W + ((min - rangeStart * 60) / rangeMins) * gridW;
 }
 
-function xToMin(
-    x: number,
-    rangeStart: number,
-    rangeEnd: number,
-    gridW: number
-): number {
+function xToMin(x: number, rangeStart: number, rangeEnd: number, gridW: number): number {
     const rangeMins = (rangeEnd - rangeStart) * 60;
     return rangeStart * 60 + ((x - BAY_LABEL_W) / gridW) * rangeMins;
 }
 
 // ─── Draw helpers ─────────────────────────────────────────────────────────────
 
-function drawRoundedRect(
-    ctx: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    r: number
-): void {
+function drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
     r = Math.min(r, w / 2, h / 2);
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -188,18 +191,15 @@ function drawHeader(
     gridW: number,
     showDwell: boolean
 ): void {
-    // Background
     ctx.fillStyle = C.headerBg;
     ctx.fillRect(0, 0, canvasW, HEADER_H);
 
-    // "Resource" label in label column
     ctx.fillStyle = C.headerText;
     ctx.font = "bold 11px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("Resource", BAY_LABEL_W / 2, HEADER_H / 2);
 
-    // Bottom border
     ctx.strokeStyle = C.headerBorder;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -207,7 +207,6 @@ function drawHeader(
     ctx.lineTo(canvasW, HEADER_H - 0.5);
     ctx.stroke();
 
-    // Right border of label column
     ctx.strokeStyle = C.labelBorder;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -215,10 +214,8 @@ function drawHeader(
     ctx.lineTo(BAY_LABEL_W - 0.5, HEADER_H);
     ctx.stroke();
 
-    // Hour labels and gridlines
     ctx.font = "10px sans-serif";
     ctx.textAlign = "center";
-
     const pxPerMin = gridW / ((rangeEnd - rangeStart) * 60);
 
     for (let h = rangeStart; h <= rangeEnd; h++) {
@@ -229,15 +226,12 @@ function drawHeader(
         ctx.moveTo(x, 4);
         ctx.lineTo(x, HEADER_H - 1);
         ctx.stroke();
-
         if (h < rangeEnd) {
             ctx.fillStyle = C.headerText;
-            const labelX = x + 30 * pxPerMin;
-            ctx.fillText(`${String(h).padStart(2, "0")}:00`, labelX, HEADER_H / 2);
+            ctx.fillText(`${String(h).padStart(2, "0")}:00`, x + 30 * pxPerMin, HEADER_H / 2);
         }
     }
 
-    // 25-min dwell ticks in header
     if (showDwell) {
         ctx.strokeStyle = C.gridMinor;
         ctx.lineWidth = 0.5;
@@ -252,21 +246,74 @@ function drawHeader(
     }
 }
 
-function drawGroupRow(
+// Draws the current-time pill label in the header area
+function drawNowHeaderMarker(
     ctx: CanvasRenderingContext2D,
-    row: CanvasRow,
-    canvasW: number,
-    collapsed: boolean
+    nowMin: number,
+    rangeStart: number,
+    rangeEnd: number,
+    gridW: number
 ): void {
-    // Background
+    const x = minToX(nowMin, rangeStart, rangeEnd, gridW);
+    const label = formatMinutes(nowMin);
+
+    ctx.save();
+    ctx.font = "bold 9px sans-serif";
+    const lw = ctx.measureText(label).width;
+    const pw = lw + 8;
+    const ph = 14;
+    const px = x - pw / 2;
+    const py = 2;
+
+    // Red pill
+    drawRoundedRect(ctx, px, py, pw, ph, 3);
+    ctx.fillStyle = C.nowPill;
+    ctx.fill();
+
+    // White time label
+    ctx.fillStyle = "#fff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, x, py + ph / 2);
+
+    // Tick line from pill bottom to header bottom
+    ctx.strokeStyle = C.nowPill;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x, py + ph);
+    ctx.lineTo(x, HEADER_H);
+    ctx.stroke();
+    ctx.restore();
+}
+
+// Draws the dashed vertical line in the scrollable content area (called inside save/restore)
+function drawNowContentLine(
+    ctx: CanvasRenderingContext2D,
+    nowMin: number,
+    rangeStart: number,
+    rangeEnd: number,
+    gridW: number
+): void {
+    const x = minToX(nowMin, rangeStart, rangeEnd, gridW);
+    ctx.save();
+    ctx.strokeStyle = C.nowLine;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, 50000); // clipping handles the end
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+}
+
+function drawGroupRow(ctx: CanvasRenderingContext2D, row: CanvasRow, canvasW: number, collapsed: boolean): void {
     ctx.fillStyle = C.groupBg;
     ctx.fillRect(0, row.y, canvasW, row.h);
 
-    // Left accent border (4px)
     ctx.fillStyle = C.groupAccent;
     ctx.fillRect(0, row.y, 4, row.h);
 
-    // Bottom border
     ctx.strokeStyle = C.groupBorder;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -274,14 +321,12 @@ function drawGroupRow(
     ctx.lineTo(canvasW, row.y + row.h - 0.5);
     ctx.stroke();
 
-    // Label text
     ctx.fillStyle = C.groupText;
     ctx.font = "bold 13px sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
     ctx.fillText(row.label, 12, row.y + row.h / 2);
 
-    // Chevron
     ctx.fillStyle = C.groupText;
     ctx.font = "12px sans-serif";
     ctx.textAlign = "right";
@@ -296,22 +341,20 @@ function drawBayRow(
     rangeStart: number,
     rangeEnd: number,
     gridW: number,
-    showDwell: boolean
+    showDwell: boolean,
+    bayStatus: string
 ): void {
     const y = row.y;
     const h = row.h;
 
-    // Row background (alternating)
     ctx.fillStyle = rowIdx % 2 === 0 ? C.rowEven : C.rowOdd;
     ctx.fillRect(BAY_LABEL_W, y, canvasW - BAY_LABEL_W - SCROLLBAR_W, h);
 
-    // Label column background
     ctx.fillStyle = C.labelBg;
     ctx.fillRect(0, y, BAY_LABEL_W, h);
 
     const pxPerMin = gridW / ((rangeEnd - rangeStart) * 60);
 
-    // 25-min dwell shading
     if (showDwell) {
         ctx.fillStyle = C.dwellShade;
         for (let m = rangeStart * 60; m < rangeEnd * 60; m += 50) {
@@ -320,7 +363,6 @@ function drawBayRow(
         }
     }
 
-    // Major hour gridlines
     ctx.strokeStyle = C.gridMajor;
     ctx.lineWidth = 0.5;
     for (let hh = rangeStart; hh <= rangeEnd; hh++) {
@@ -331,7 +373,6 @@ function drawBayRow(
         ctx.stroke();
     }
 
-    // Row bottom border
     ctx.strokeStyle = C.rowBorder;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -339,7 +380,6 @@ function drawBayRow(
     ctx.lineTo(canvasW - SCROLLBAR_W, y + h - 0.5);
     ctx.stroke();
 
-    // Label column right border
     ctx.strokeStyle = C.labelBorder;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -347,35 +387,40 @@ function drawBayRow(
     ctx.lineTo(BAY_LABEL_W - 0.5, y + h);
     ctx.stroke();
 
-    // Bay label
+    // Bay label + optional status dot
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, y, BAY_LABEL_W - 2, h);
     ctx.clip();
+
+    const dotColor = bayStatusColor(bayStatus);
+    const hasDot = !!dotColor;
+
+    if (hasDot) {
+        const dotR = Math.min(BAY_STATUS_DOT_R, h / 2 - 2);
+        ctx.beginPath();
+        ctx.arc(BAY_STATUS_DOT_X, y + h / 2, dotR, 0, Math.PI * 2);
+        ctx.fillStyle = dotColor;
+        ctx.fill();
+    }
+
     ctx.fillStyle = C.labelText;
     ctx.font = "11px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(row.label, BAY_LABEL_W / 2, y + h / 2);
+    // Shift label right when dot is present to avoid overlap
+    const labelCx = hasDot ? (BAY_STATUS_DOT_X * 2 + BAY_LABEL_W - 2) / 2 : BAY_LABEL_W / 2;
+    ctx.fillText(row.label, labelCx, y + h / 2);
+
     ctx.restore();
 }
 
 function blockColors(block: ScheduleBlock): { fill: string; text: string } {
-    if (block.color) {
-        // For custom colors, use white text (caller's responsibility)
-        return { fill: block.color, text: "#ffffff" };
-    }
-    if (block.isConflict) {
-        return { fill: C.blockConflict, text: C.blockConflictText };
-    }
+    if (block.color) return { fill: block.color, text: "#ffffff" };
+    if (block.isConflict) return { fill: C.blockConflict, text: C.blockConflictText };
     const s = (block.status ?? "").toLowerCase().replace(/\s+/g, "");
-    if (s === "inprogress" || s === "docked" || s === "arriving") {
-        return { fill: C.blockInProgress, text: C.blockInProgressText };
-    }
-    if (s === "completed" || s === "done" || s === "departed") {
-        return { fill: C.blockCompleted, text: C.blockCompletedText };
-    }
-    // Default: Scheduled / Arriving / anything else
+    if (s === "inprogress" || s === "docked" || s === "arriving") return { fill: C.blockInProgress, text: C.blockInProgressText };
+    if (s === "completed" || s === "done" || s === "departed") return { fill: C.blockCompleted, text: C.blockCompletedText };
     return { fill: C.blockScheduled, text: C.blockScheduledText };
 }
 
@@ -392,8 +437,6 @@ function drawBlock(
 ): void {
     const rangeStartMin = rangeStart * 60;
     const rangeEndMin = rangeEnd * 60;
-
-    // Clip to visible time range
     const visStart = Math.max(startMin, rangeStartMin);
     const visEnd = Math.min(endMin, rangeEndMin);
     if (visStart >= visEnd) return;
@@ -403,33 +446,27 @@ function drawBlock(
     const bw = Math.max(2, bxEnd - bx);
     const by = row.y + 2;
     const bh = row.h - 4;
-
     if (bw < 1 || bh < 1) return;
 
     const { fill, text } = blockColors(block);
-
     ctx.globalAlpha = isDragging ? 0.75 : 1;
 
-    // Rounded rect (4px radius)
     drawRoundedRect(ctx, bx, by, bw, bh, 4);
     ctx.fillStyle = fill;
     ctx.fill();
 
-    // Conflict border
     if (block.isConflict) {
         ctx.strokeStyle = "#b71c1c";
         ctx.lineWidth = 1.5;
         ctx.stroke();
     }
 
-    // Resize handles
     if (bw > RESIZE_HIT * 2 + 4) {
         ctx.fillStyle = C.blockEdge;
         ctx.fillRect(bx, by, RESIZE_HIT, bh);
         ctx.fillRect(bx + bw - RESIZE_HIT, by, RESIZE_HIT, bh);
     }
 
-    // Label text
     if (bw > 22 && bh > 8) {
         ctx.save();
         ctx.beginPath();
@@ -452,6 +489,7 @@ interface RenderParams {
     blocks: ScheduleBlock[];
     rows: CanvasRow[];
     bayRowMap: Map<string, CanvasRow>;
+    bayStatusMap: Map<string, string>;
     collapsedGroups: Set<string>;
     scrollY: number;
     canvasW: number;
@@ -461,45 +499,45 @@ interface RenderParams {
     drag: DragState | null;
     rangeStart: number;
     rangeEnd: number;
+    nowMin: number | null;
 }
 
 function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
-    const { blocks, rows, bayRowMap, collapsedGroups, scrollY, canvasW, canvasH, showDwell, drag, rangeStart, rangeEnd } = p;
+    const { blocks, rows, bayRowMap, bayStatusMap, collapsedGroups, scrollY, canvasW, canvasH, showDwell, drag, rangeStart, rangeEnd, nowMin } = p;
     const gridW = canvasW - BAY_LABEL_W - SCROLLBAR_W;
     const viewH = canvasH - HEADER_H;
 
     ctx.clearRect(0, 0, canvasW, canvasH);
-
-    // Background
     ctx.fillStyle = C.outerBg;
     ctx.fillRect(0, 0, canvasW, canvasH);
 
-    // Draw header (fixed, not scrolled)
+    // Fixed header
     drawHeader(ctx, canvasW, rangeStart, rangeEnd, gridW, showDwell);
 
-    // Clip to scrollable viewport
+    // Current-time pill in header (drawn on top of header, before clip)
+    const inRange = nowMin !== null && nowMin > rangeStart * 60 && nowMin < rangeEnd * 60;
+    if (inRange) {
+        drawNowHeaderMarker(ctx, nowMin!, rangeStart, rangeEnd, gridW);
+    }
+
+    // Clip + translate for scrollable content
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, HEADER_H, canvasW, viewH);
     ctx.clip();
     ctx.translate(0, HEADER_H - scrollY);
 
-    // Determine visible row range
     const viewTop = scrollY;
     const viewBot = scrollY + viewH;
 
-    let bayRowIdx = 0; // counter for alternating row color
+    let bayRowIdx = 0;
     for (const row of rows) {
-        if (row.y + row.h <= viewTop) {
-            if (row.type === "bay") bayRowIdx++;
-            continue;
-        }
+        if (row.y + row.h <= viewTop) { if (row.type === "bay") bayRowIdx++; continue; }
         if (row.y >= viewBot) break;
-
         if (row.type === "group") {
             drawGroupRow(ctx, row, canvasW, collapsedGroups.has(row.groupId));
         } else {
-            drawBayRow(ctx, row, bayRowIdx, canvasW, rangeStart, rangeEnd, gridW, showDwell);
+            drawBayRow(ctx, row, bayRowIdx, canvasW, rangeStart, rangeEnd, gridW, showDwell, bayStatusMap.get(row.bayId ?? "") ?? "");
             bayRowIdx++;
         }
     }
@@ -507,32 +545,25 @@ function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
     // Draw blocks
     const rangeStartMin = rangeStart * 60;
     const rangeEndMin = rangeEnd * 60;
-
     for (const block of blocks) {
         let startMin = block.startMin;
         let endMin = block.endMin;
         let row = bayRowMap.get(block.bayId);
-
         if (!row) continue;
-
-        // Apply drag state
         if (drag && drag.block.item === block.item) {
             startMin = drag.currentStart;
             endMin = drag.currentEnd;
-            // Row may have changed (vertical move to different bay)
             const dragRow = rows[drag.currentRowIdx];
-            if (dragRow && dragRow.type === "bay") {
-                row = dragRow;
-            }
+            if (dragRow && dragRow.type === "bay") row = dragRow;
         }
-
-        // Skip if outside visible time range
         if (endMin <= rangeStartMin || startMin >= rangeEndMin) continue;
-
-        // Skip if row not visible vertically
         if (row.y + row.h <= viewTop || row.y >= viewBot) continue;
-
         drawBlock(ctx, block, row, startMin, endMin, rangeStart, rangeEnd, gridW, drag?.block.item === block.item);
+    }
+
+    // Current-time dashed line in content area (drawn on top of blocks)
+    if (inRange) {
+        drawNowContentLine(ctx, nowMin!, rangeStart, rangeEnd, gridW);
     }
 
     ctx.restore();
@@ -545,6 +576,8 @@ export function SchedulerCanvas({
     groups,
     collapsedGroups,
     onGroupToggle,
+    bayStatusMap,
+    displayDay,
     rowHeight,
     showDwellMarkers,
     defaultDwellMinutes,
@@ -567,20 +600,17 @@ export function SchedulerCanvas({
 
     const hasMultipleGroups = groups.length > 1 || (groups.length === 1 && groups[0]?.id !== "__default__");
 
-    // Compute rows from groups
     const rows = useMemo(
         () => computeRows(groups, collapsedGroups, hasMultipleGroups, rowHeight),
         [groups, collapsedGroups, hasMultipleGroups, rowHeight]
     );
 
-    // Total virtual height
     const totalH = useMemo(() => {
         if (rows.length === 0) return 0;
         const last = rows[rows.length - 1];
         return last.y + last.h;
     }, [rows]);
 
-    // Bay row map: bayId -> CanvasRow (for fast block placement)
     const bayRowMap = useMemo(() => {
         const m = new Map<string, CanvasRow>();
         for (const r of rows) {
@@ -589,7 +619,6 @@ export function SchedulerCanvas({
         return m;
     }, [rows]);
 
-    // Scroll clamping
     const updateScrollY = useCallback(
         (y: number) => {
             const maxScroll = Math.max(0, totalH - (canvasH - HEADER_H));
@@ -600,7 +629,6 @@ export function SchedulerCanvas({
         [totalH, canvasH]
     );
 
-    // Responsive resize observer
     useLayoutEffect(() => {
         const el = containerRef.current;
         if (!el) return;
@@ -613,7 +641,19 @@ export function SchedulerCanvas({
         return () => obs.disconnect();
     }, []);
 
-    // Draw
+    // Compute current-time position (only when displaying today)
+    const computeNowMin = useCallback((): number | null => {
+        const now = new Date();
+        if (
+            now.getFullYear() === displayDay.getFullYear() &&
+            now.getMonth() === displayDay.getMonth() &&
+            now.getDate() === displayDay.getDate()
+        ) {
+            return now.getHours() * 60 + now.getMinutes();
+        }
+        return null;
+    }, [displayDay]);
+
     const drawCanvas = useCallback(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -623,6 +663,7 @@ export function SchedulerCanvas({
             blocks,
             rows,
             bayRowMap,
+            bayStatusMap,
             collapsedGroups,
             scrollY: scrollYRef.current,
             canvasW,
@@ -631,23 +672,29 @@ export function SchedulerCanvas({
             showDwell: showDwellMarkers,
             drag: dragRef.current,
             rangeStart: timeRangeStart,
-            rangeEnd: timeRangeEnd
+            rangeEnd: timeRangeEnd,
+            nowMin: computeNowMin()
         });
-    }, [blocks, rows, bayRowMap, collapsedGroups, canvasW, canvasH, rowHeight, showDwellMarkers, timeRangeStart, timeRangeEnd]);
+    }, [blocks, rows, bayRowMap, bayStatusMap, collapsedGroups, canvasW, canvasH, rowHeight, showDwellMarkers, timeRangeStart, timeRangeEnd, computeNowMin]);
 
     useEffect(() => { drawCanvas(); }, [drawCanvas]);
 
     // Re-clamp scroll when layout changes
+    useEffect(() => { updateScrollY(scrollYRef.current); }, [totalH, canvasH, updateScrollY]);
+
+    // 1-minute ticker for the current-time line (uses ref to avoid stale closure)
+    const drawCanvasRef = useRef(drawCanvas);
+    useEffect(() => { drawCanvasRef.current = drawCanvas; });
     useEffect(() => {
-        updateScrollY(scrollYRef.current);
-    }, [totalH, canvasH, updateScrollY]);
+        const id = setInterval(() => drawCanvasRef.current(), 60000);
+        return () => clearInterval(id);
+    }, []);
 
     // ─── Hit testing ──────────────────────────────────────────────────────────
 
     const hitTestRow = useCallback(
         (canvasY: number): CanvasRow | null => {
             const worldY = canvasY - HEADER_H + scrollYRef.current;
-            // Binary-search friendly: rows are sorted by y
             for (const row of rows) {
                 if (worldY >= row.y && worldY < row.y + row.h) return row;
                 if (row.y > worldY) break;
@@ -705,7 +752,6 @@ export function SchedulerCanvas({
             setHoverInfo(null);
             const { x, y } = canvasCoords(e);
 
-            // Check group header click
             if (y >= HEADER_H) {
                 const row = hitTestRow(y);
                 if (row?.type === "group") {
@@ -719,7 +765,6 @@ export function SchedulerCanvas({
             const pxPerMin = gridW / ((timeRangeEnd - timeRangeStart) * 60);
 
             if (hit) {
-                // Find row index for vertical drag
                 const rowIdx = rows.findIndex(r => r.type === "bay" && r.bayId === hit.block.bayId);
                 dragRef.current = {
                     mode: hit.mode,
@@ -785,13 +830,11 @@ export function SchedulerCanvas({
                 drag.currentStart = ns;
                 drag.currentEnd = ns + dur;
 
-                // Vertical bay change — only snap to bay rows
                 const worldY = y - HEADER_H + scrollYRef.current;
                 const bayRows = rows.filter(r => r.type === "bay");
                 let newRowIdx = drag.origRowIdx;
                 for (let i = 0; i < bayRows.length; i++) {
                     if (worldY >= bayRows[i].y && worldY < bayRows[i].y + bayRows[i].h) {
-                        // Find this bay's index in rows[]
                         const globalIdx = rows.findIndex(r => r === bayRows[i]);
                         if (globalIdx >= 0) newRowIdx = globalIdx;
                         break;
@@ -817,7 +860,6 @@ export function SchedulerCanvas({
             dragRef.current = null;
 
             if (!drag) {
-                // Click on empty slot
                 if (y > HEADER_H && x > BAY_LABEL_W) {
                     const row = hitTestRow(y);
                     if (row?.type === "bay" && row.bayId) {
@@ -906,19 +948,22 @@ export function SchedulerCanvas({
         [totalH, viewportH, thumbH, updateScrollY]
     );
 
-    // Tooltip position — flips left of cursor when near right edge
+    // Tooltip position — flips left of cursor near right viewport edge
     const tooltipStyle: CSSProperties | undefined = hoverInfo
         ? {
               position: "fixed",
               left:
-                  hoverInfo.clientX + 16 + 240 > (typeof window !== "undefined" ? window.innerWidth : 9999)
-                      ? hoverInfo.clientX - 248
+                  hoverInfo.clientX + 16 + 260 > (typeof window !== "undefined" ? window.innerWidth : 9999)
+                      ? hoverInfo.clientX - 268
                       : hoverInfo.clientX + 16,
               top: Math.max(4, hoverInfo.clientY - 10),
               zIndex: 9999,
               pointerEvents: "none"
           }
         : undefined;
+
+    const block = hoverInfo?.block;
+    const hasCustomLines = block && (block.tooltipText || block.tooltipText2 || block.tooltipText3);
 
     return (
         <div
@@ -951,20 +996,21 @@ export function SchedulerCanvas({
             </div>
 
             {/* Hover tooltip */}
-            {hoverInfo && tooltipStyle && (
+            {block && tooltipStyle && (
                 <div className="truck-scheduler__tooltip" style={tooltipStyle}>
-                    <div className="truck-scheduler__tooltip-title">{hoverInfo.block.truckId}</div>
-                    <div className="truck-scheduler__tooltip-row">Bay: {hoverInfo.block.bayId}</div>
-                    {hoverInfo.block.groupId !== "__default__" && (
-                        <div className="truck-scheduler__tooltip-row">Group: {hoverInfo.block.groupId}</div>
+                    <div className="truck-scheduler__tooltip-title">{block.truckId}</div>
+                    <div className="truck-scheduler__tooltip-row">Bay: {block.bayId}</div>
+                    {block.groupId !== "__default__" && (
+                        <div className="truck-scheduler__tooltip-row">Group: {block.groupId}</div>
                     )}
                     <div className="truck-scheduler__tooltip-row">
-                        {formatMinutes(hoverInfo.block.startMin)} – {formatMinutes(hoverInfo.block.endMin)}
+                        {formatMinutes(block.startMin)} – {formatMinutes(block.endMin)}
                     </div>
-                    <div className="truck-scheduler__tooltip-row">Status: {hoverInfo.block.status}</div>
-                    {hoverInfo.block.tooltipText && (
-                        <div className="truck-scheduler__tooltip-extra">{hoverInfo.block.tooltipText}</div>
-                    )}
+                    <div className="truck-scheduler__tooltip-row">Status: {block.status}</div>
+                    {hasCustomLines && <div className="truck-scheduler__tooltip-divider" />}
+                    {block.tooltipText && <div className="truck-scheduler__tooltip-extra">{block.tooltipText}</div>}
+                    {block.tooltipText2 && <div className="truck-scheduler__tooltip-extra">{block.tooltipText2}</div>}
+                    {block.tooltipText3 && <div className="truck-scheduler__tooltip-extra">{block.tooltipText3}</div>}
                 </div>
             )}
         </div>

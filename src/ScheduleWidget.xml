@@ -72,9 +72,34 @@
                 </attributeTypes>
             </property>
 
+            <property key="bayStatusAttr" type="attribute" dataSource="scheduleData" required="false">
+                <caption>Bay Status</caption>
+                <description>Optional attribute for the bay's operational status. Accepted values: "available" (green), "occupied" (blue), "maintenance" (red). Also accepts any CSS color string. Shows as a small dot to the left of the bay label.</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                    <attributeType name="Enum" />
+                </attributeTypes>
+            </property>
+
             <property key="tooltipAttr" type="attribute" dataSource="scheduleData" required="false">
-                <caption>Tooltip Text</caption>
-                <description>Optional attribute to display extra information in the hover tooltip for each truck block (e.g. driver name, cargo type).</description>
+                <caption>Tooltip Line 1</caption>
+                <description>First custom line in the hover tooltip. Use Mendix string expressions to build it from multiple variables, e.g. 'Driver: ' + $currentObject/DriverName.</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                </attributeTypes>
+            </property>
+
+            <property key="tooltipAttr2" type="attribute" dataSource="scheduleData" required="false">
+                <caption>Tooltip Line 2</caption>
+                <description>Second custom line in the hover tooltip (e.g. cargo type, weight, notes).</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                </attributeTypes>
+            </property>
+
+            <property key="tooltipAttr3" type="attribute" dataSource="scheduleData" required="false">
+                <caption>Tooltip Line 3</caption>
+                <description>Third custom line in the hover tooltip.</description>
                 <attributeTypes>
                     <attributeType name="String" />
                 </attributeTypes>
