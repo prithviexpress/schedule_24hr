@@ -145,102 +145,67 @@ function xToMin(x: number, rangeStart: number, rangeEnd: number, gridW: number):
     return rangeStart * 60 + ((x - BAY_LABEL_W) / gridW) * rangeMins;
 }
 
-// Box-truck icon — matches standard delivery-truck silhouette, ~25 w × 21 h
-// occupied=true → solid fill; occupied=false → outline only
+// Box-truck side-view icon, 25 w × 18 h, centred at (cx, cy)
 function drawTruckIcon(ctx: CanvasRenderingContext2D, cx: number, cy: number, occupied: boolean, color: string): void {
-    const bw = 16, bh = 12; // cargo body
-    const cw = 9, ch = 10;  // cab (right side)
-    const wr = 4;            // wheel radius
-    const wheelGap = 2;
+    const bw = 17, bh = 11; // cargo body w × h
+    const cw = 8,  ch = 9;  // cab w × h  (sits flush at body bottom)
+    const wr = 3;            // wheel radius
+    const gap = 1.5;         // gap between body bottom and wheel tops
 
-    const totalW = bw + cw;
-    const totalH = bh + wheelGap + wr * 2;
-    const ox = cx - totalW / 2;
+    const totalH = bh + gap + wr * 2;
+    const ox = cx - (bw + cw) / 2;
     const oy = cy - totalH / 2;
 
-    const cabX = ox + bw;
-    const cabY = oy + (bh - ch); // cab sits flush at bottom of body
-    const wheelCY = oy + bh + wheelGap + wr;
-    const w1x = ox + bw * 0.28;
-    const w2x = cabX + cw * 0.58;
+    const cabX   = ox + bw;
+    const cabTopY = oy + (bh - ch);         // cab top 2px below body top
+    const wheelCY = oy + bh + gap + wr;
+    const w1x = ox + bw * 0.25;            // rear wheel
+    const w2x = cabX + cw * 0.6;           // front wheel
 
     ctx.save();
     ctx.lineWidth = 1.5;
     ctx.lineJoin = "round";
-    ctx.lineCap = "round";
+    ctx.lineCap  = "round";
 
     if (occupied) {
         ctx.fillStyle = color;
 
-        // Cargo body with rounded left corners
+        // Cargo body
+        ctx.fillRect(ox, oy, bw, bh);
+
+        // Cab — angled windshield
         ctx.beginPath();
-        const r = 2.5;
-        ctx.moveTo(ox + r, oy);
-        ctx.lineTo(ox + bw, oy);
-        ctx.lineTo(ox + bw, oy + bh);
-        ctx.lineTo(ox + r, oy + bh);
-        ctx.arcTo(ox, oy + bh, ox, oy + bh - r, r);
-        ctx.lineTo(ox, oy + r);
-        ctx.arcTo(ox, oy, ox + r, oy, r);
+        ctx.moveTo(cabX,           cabTopY + ch * 0.32);
+        ctx.lineTo(cabX + cw * 0.5, cabTopY);
+        ctx.lineTo(cabX + cw,       cabTopY);
+        ctx.lineTo(cabX + cw,       oy + bh);
+        ctx.lineTo(cabX,            oy + bh);
         ctx.closePath();
         ctx.fill();
 
-        // Cab with angled windshield
-        ctx.beginPath();
-        ctx.moveTo(cabX, cabY + ch * 0.33);
-        ctx.lineTo(cabX + cw * 0.52, cabY);
-        ctx.lineTo(cabX + cw, cabY);
-        ctx.lineTo(cabX + cw, oy + bh);
-        ctx.lineTo(cabX, oy + bh);
-        ctx.closePath();
-        ctx.fill();
-
-        // Wheels (filled)
-        ctx.beginPath();
-        ctx.arc(w1x, wheelCY, wr, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(w2x, wheelCY, wr, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Wheel-well cutouts so wheels read as separate from body
-        const archH = wr * 0.55;
-        ctx.fillStyle = C.labelBg;
-        ctx.fillRect(w1x - wr - 1, oy + bh - archH, wr * 2 + 2, archH + 1);
-        ctx.fillRect(w2x - wr - 1, oy + bh - archH, wr * 2 + 2, archH + 1);
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(w1x, wheelCY, wr, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(w2x, wheelCY, wr, 0, Math.PI * 2);
-        ctx.fill();
+        // Wheels
+        ctx.beginPath(); ctx.arc(w1x, wheelCY, wr, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(w2x, wheelCY, wr, 0, Math.PI * 2); ctx.fill();
 
     } else {
         ctx.strokeStyle = color;
 
-        // Cargo body outline
-        ctx.beginPath();
-        ctx.rect(ox + 0.75, oy + 0.75, bw - 1.5, bh - 1.5);
-        ctx.stroke();
+        // Cargo body
+        ctx.strokeRect(ox + 0.75, oy + 0.75, bw - 1.5, bh - 1.5);
 
-        // Cab outline
+        // Cab
         ctx.beginPath();
-        ctx.moveTo(cabX + 0.75, cabY + ch * 0.33);
-        ctx.lineTo(cabX + cw * 0.52, cabY + 0.75);
-        ctx.lineTo(cabX + cw - 0.75, cabY + 0.75);
-        ctx.lineTo(cabX + cw - 0.75, oy + bh - 0.75);
-        ctx.lineTo(cabX + 0.75, oy + bh - 0.75);
+        ctx.moveTo(cabX + 0.75,              cabTopY + ch * 0.32);
+        ctx.lineTo(cabX + cw * 0.5,          cabTopY + 0.75);
+        ctx.lineTo(cabX + cw - 0.75,          cabTopY + 0.75);
+        ctx.lineTo(cabX + cw - 0.75,          oy + bh - 0.75);
+        ctx.lineTo(cabX + 0.75,              oy + bh - 0.75);
         ctx.closePath();
         ctx.stroke();
 
-        // Wheel outlines
-        ctx.beginPath();
-        ctx.arc(w1x, wheelCY, wr - 0.75, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(w2x, wheelCY, wr - 0.75, 0, Math.PI * 2);
-        ctx.stroke();
+        // Wheels
+        ctx.beginPath(); ctx.arc(w1x, wheelCY, wr - 0.5, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(w2x, wheelCY, wr - 0.5, 0, Math.PI * 2); ctx.stroke();
     }
 
     ctx.restore();
@@ -450,10 +415,10 @@ function drawBayRow(
 
     const statusColor = bayInfo ? bayStatusColor(bayInfo.color) : "";
     const occupied = bayInfo?.occupied ?? null;
-    // Show truck whenever bay data is connected, regardless of whether occupied is set
     const hasTruck = bayInfo !== undefined;
-    // Fallback: slate-blue-gray so the icon is always clearly visible
-    const truckColor = statusColor || "#546E7A";
+    // Color from bay data; if not set, use occupancy-aware defaults so icon
+    // is always meaningful without requiring bayColorAttr to be wired up
+    const truckColor = statusColor || (occupied === false ? "#90A4AE" : "#1565C0");
 
     if (hasTruck) {
         drawTruckIcon(ctx, 17, y + h / 2, occupied ?? false, truckColor);
