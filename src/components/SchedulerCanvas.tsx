@@ -16,8 +16,6 @@ const HEADER_H = 36;
 const SCROLLBAR_W = 10;
 const RESIZE_HIT = 6;
 const MIN_BLOCK_MIN = 1;
-const BAY_STATUS_DOT_R = 5;
-const BAY_STATUS_DOT_X = 10;
 
 // ─── Color palette ────────────────────────────────────────────────────────────
 const C = {
@@ -66,10 +64,10 @@ function formatMinutes(m: number): string {
 function bayStatusColor(status: string): string {
     if (!status) return "";
     const s = status.toLowerCase().trim();
-    if (s === "available" || s === "open" || s === "free" || s === "operational") return "#43a047";
-    if (s === "occupied" || s === "busy" || s === "inuse" || s === "in use" || s === "active" || s === "docked") return "#1e88e5";
-    if (s === "maintenance" || s === "closed" || s === "error" || s === "offline" || s === "outofservice") return "#e53935";
-    // Accept raw CSS colors (#hex, rgb, etc.)
+    if (s === "available" || s === "open" || s === "free" || s === "operational" || s === "green") return "#43a047";
+    if (s === "occupied" || s === "busy" || s === "inuse" || s === "in use" || s === "active" || s === "docked" || s === "blue") return "#1e88e5";
+    if (s === "maintenance" || s === "closed" || s === "error" || s === "offline" || s === "outofservice" || s === "red") return "#e53935";
+    if (s === "warning" || s === "caution" || s === "orange" || s === "amber") return "#fb8c00";
     if (s.startsWith("#") || s.startsWith("rgb")) return status;
     return "#9e9e9e";
 }
@@ -349,19 +347,18 @@ function drawBayRow(
     const hasDot = !!dotColor;
 
     if (hasDot) {
-        const dotR = Math.min(BAY_STATUS_DOT_R, h / 2 - 2);
-        ctx.beginPath();
-        ctx.arc(BAY_STATUS_DOT_X, y + h / 2, dotR, 0, Math.PI * 2);
+        const sqSize = Math.min(10, h - 6);
+        const sqX = 3;
+        const sqY = y + (h - sqSize) / 2;
         ctx.fillStyle = dotColor;
-        ctx.fill();
+        ctx.fillRect(sqX, sqY, sqSize, sqSize);
     }
 
     ctx.fillStyle = C.labelText;
     ctx.font = "11px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    // Shift label right when dot is present to avoid overlap
-    const labelCx = hasDot ? (BAY_STATUS_DOT_X * 2 + BAY_LABEL_W - 2) / 2 : BAY_LABEL_W / 2;
+    const labelCx = hasDot ? (16 + BAY_LABEL_W - 2) / 2 : BAY_LABEL_W / 2;
     ctx.fillText(row.label, labelCx, y + h / 2);
 
     ctx.restore();

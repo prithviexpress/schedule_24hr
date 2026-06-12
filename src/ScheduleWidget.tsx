@@ -55,8 +55,8 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
             const endDate = endTimeAttr.get(item).value as Date | undefined;
             const status = (statusAttr?.get(item).value as string) ?? "Scheduled";
             const color = (colorAttr?.get(item).value as string) ?? "";
-            const bayStatus = (bayStatusAttr?.get(item).value as string) ?? "";
-            const tooltipText = (tooltipAttr?.get(item).value as string) ?? "";
+            const bayStatus = bayStatusAttr ? (bayStatusAttr.get(item).displayValue ?? "") : "";
+            const tooltipText = tooltipAttr ? (tooltipAttr.get(item).displayValue ?? "") : "";
 
             if (!startDate || !endDate || !bayId) return [];
 
