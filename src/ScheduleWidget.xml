@@ -89,31 +89,6 @@
                 </attributeTypes>
             </property>
 
-            <property key="tooltipAttr2" type="attribute" dataSource="scheduleData" required="false">
-                <caption>Tooltip Line 2</caption>
-                <description>Second custom line in the hover tooltip (e.g. cargo type, weight, notes).</description>
-                <attributeTypes>
-                    <attributeType name="String" />
-                </attributeTypes>
-            </property>
-
-            <property key="tooltipAttr3" type="attribute" dataSource="scheduleData" required="false">
-                <caption>Tooltip Line 3</caption>
-                <description>Third custom line in the hover tooltip.</description>
-                <attributeTypes>
-                    <attributeType name="String" />
-                </attributeTypes>
-            </property>
-
-            <property key="groupIdAttr" type="attribute" dataSource="scheduleData" required="false">
-                <caption>Group / Terminal</caption>
-                <description>Optional string attribute to group bays into collapsible sections (e.g. Terminal, Zone). All bays go to one unnamed group if not set.</description>
-                <attributeTypes>
-                    <attributeType name="String"/>
-                    <attributeType name="Enum"/>
-                </attributeTypes>
-            </property>
-
             <property key="displayDate" type="attribute" required="false">
                 <caption>Display Date</caption>
                 <description>DateTime attribute controlling which day's schedule is shown. Defaults to today when empty.</description>

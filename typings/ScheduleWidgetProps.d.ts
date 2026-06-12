@@ -20,9 +20,6 @@ export interface ScheduleWidgetContainerProps {
     colorAttr?: ListAttributeValue<string>;
     bayStatusAttr?: ListAttributeValue<string>;
     tooltipAttr?: ListAttributeValue<string>;
-    tooltipAttr2?: ListAttributeValue<string>;
-    tooltipAttr3?: ListAttributeValue<string>;
-    groupIdAttr?: ListAttributeValue<string>;
     displayDate?: EditableValue<Date | string>;
     onTruckClick?: ListActionValue;
     onScheduleChange?: ListActionValue;
@@ -54,9 +51,6 @@ export interface ScheduleWidgetPreviewProps {
     colorAttr: string;
     bayStatusAttr: string;
     tooltipAttr: string;
-    tooltipAttr2: string;
-    tooltipAttr3: string;
-    groupIdAttr: string;
     displayDate: string;
     onTruckClick: {} | null;
     onScheduleChange: {} | null;

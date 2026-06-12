@@ -1,12 +1,8 @@
-import React, { ReactElement, useEffect, useRef, useState } from "react";
-import { BayGroup } from "./types";
+import React, { ReactElement } from "react";
 
 interface ToolbarProps {
     displayDay: Date;
     onDayChange: (d: Date) => void;
-    groups: BayGroup[];
-    hiddenGroupIds: Set<string>;
-    onHiddenChange: (ids: Set<string>) => void;
 }
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -22,7 +18,7 @@ function shiftDay(d: Date, delta: number): Date {
     return n;
 }
 
-export function Toolbar({ displayDay, onDayChange, groups, hiddenGroupIds, onHiddenChange }: ToolbarProps): ReactElement {
+export function Toolbar({ displayDay, onDayChange }: ToolbarProps): ReactElement {
     return (
         <div className="truck-scheduler__toolbar">
             <div className="truck-scheduler__date-nav">
@@ -36,85 +32,11 @@ export function Toolbar({ displayDay, onDayChange, groups, hiddenGroupIds, onHid
             </div>
 
             <div className="truck-scheduler__toolbar-right">
-                <GroupFilter groups={groups} hiddenGroupIds={hiddenGroupIds} onHiddenChange={onHiddenChange} />
                 <Legend />
             </div>
         </div>
     );
 }
-
-// ─── Group filter ─────────────────────────────────────────────────────────────
-
-interface GroupFilterProps {
-    groups: BayGroup[];
-    hiddenGroupIds: Set<string>;
-    onHiddenChange: (ids: Set<string>) => void;
-}
-
-function GroupFilter({ groups, hiddenGroupIds, onHiddenChange }: GroupFilterProps): ReactElement | null {
-    const [open, setOpen] = useState(false);
-    const wrapRef = useRef<HTMLDivElement>(null);
-
-    const namedGroups = groups.filter(g => g.id !== "__default__");
-    if (namedGroups.length < 2) return null;
-
-    const allVisible = hiddenGroupIds.size === 0;
-    const visibleCount = namedGroups.length - [...hiddenGroupIds].filter(id => namedGroups.some(g => g.id === id)).length;
-    const btnLabel = allVisible ? "All Groups ▾" : `${visibleCount} / ${namedGroups.length} Groups ▾`;
-
-    const toggleGroup = (id: string) => {
-        const next = new Set(hiddenGroupIds);
-        if (next.has(id)) next.delete(id); else next.add(id);
-        onHiddenChange(next);
-    };
-
-    // Close dropdown when clicking outside
-    useEffect(() => {
-        if (!open) return;
-        const handler = (e: MouseEvent) => {
-            if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
-        };
-        document.addEventListener("mousedown", handler);
-        return () => document.removeEventListener("mousedown", handler);
-    }, [open]);
-
-    return (
-        <div ref={wrapRef} className="truck-scheduler__group-filter">
-            <button
-                className={`truck-scheduler__filter-btn${!allVisible ? " truck-scheduler__filter-btn--active" : ""}`}
-                onClick={() => setOpen(o => !o)}
-                title="Filter groups"
-            >
-                {btnLabel}
-            </button>
-            {open && (
-                <div className="truck-scheduler__filter-dropdown">
-                    <label className="truck-scheduler__filter-option">
-                        <input
-                            type="checkbox"
-                            checked={allVisible}
-                            onChange={() => onHiddenChange(new Set())}
-                        />
-                        <span>All Groups</span>
-                    </label>
-                    <div className="truck-scheduler__filter-divider" />
-                    {namedGroups.map(g => (
-                        <label key={g.id} className="truck-scheduler__filter-option">
-                            <input
-                                type="checkbox"
-                                checked={!hiddenGroupIds.has(g.id)}
-                                onChange={() => toggleGroup(g.id)}
-                            />
-                            <span>{g.label || g.id}</span>
-                        </label>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-}
-
-// ─── Legend ───────────────────────────────────────────────────────────────────
 
 function Legend(): ReactElement {
     return (

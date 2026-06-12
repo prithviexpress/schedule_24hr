@@ -8,17 +8,16 @@ import React, {
     useRef,
     useState
 } from "react";
-import { ScheduleBlock, BayGroup } from "./types";
+import { ScheduleBlock } from "./types";
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
-const GROUP_H = 36;
 const BAY_LABEL_W = 120;
 const HEADER_H = 36;
 const SCROLLBAR_W = 10;
 const RESIZE_HIT = 6;
 const MIN_BLOCK_MIN = 1;
-const BAY_STATUS_DOT_R = 4;
-const BAY_STATUS_DOT_X = 9;  // x centre of the dot in label column
+const BAY_STATUS_DOT_R = 5;
+const BAY_STATUS_DOT_X = 10;
 
 // ─── Color palette ────────────────────────────────────────────────────────────
 const C = {
@@ -26,11 +25,6 @@ const C = {
     headerBg: "#f5f2ed",
     headerText: "#777",
     headerBorder: "#dddbd5",
-
-    groupBg: "#eeebe5",
-    groupText: "#222",
-    groupBorder: "#d8d5cf",
-    groupAccent: "#c8c0b0",
 
     rowEven: "#ffffff",
     rowOdd: "#faf9f7",
@@ -112,9 +106,7 @@ interface CanvasRow {
 
 export interface SchedulerCanvasProps {
     blocks: ScheduleBlock[];
-    groups: BayGroup[];
-    collapsedGroups: Set<string>;
-    onGroupToggle: (groupId: string) => void;
+    bays: string[];
     bayStatusMap: Map<string, string>;
     displayDay: Date;
     rowHeight: number;
@@ -129,27 +121,12 @@ export interface SchedulerCanvasProps {
 
 // ─── Helper: compute row layout ───────────────────────────────────────────────
 
-function computeRows(
-    groups: BayGroup[],
-    collapsedGroups: Set<string>,
-    hasMultipleGroups: boolean,
-    rowH: number
-): CanvasRow[] {
+function computeRows(bays: string[], rowH: number): CanvasRow[] {
     const rows: CanvasRow[] = [];
     let y = 0;
-    for (const g of groups) {
-        if (hasMultipleGroups || g.id !== "__default__") {
-            // Fix: "__default__" should display as "Other", not the raw key
-            const label = g.id === "__default__" ? "Other" : (g.label || g.id);
-            rows.push({ type: "group", groupId: g.id, label, y, h: GROUP_H });
-            y += GROUP_H;
-        }
-        if (!collapsedGroups.has(g.id)) {
-            for (const bayId of g.bays) {
-                rows.push({ type: "bay", groupId: g.id, label: bayId, bayId, y, h: rowH });
-                y += rowH;
-            }
-        }
+    for (const bayId of bays) {
+        rows.push({ type: "bay", groupId: "__default__", label: bayId, bayId, y, h: rowH });
+        y += rowH;
     }
     return rows;
 }
@@ -307,31 +284,6 @@ function drawNowContentLine(
     ctx.restore();
 }
 
-function drawGroupRow(ctx: CanvasRenderingContext2D, row: CanvasRow, canvasW: number, collapsed: boolean): void {
-    ctx.fillStyle = C.groupBg;
-    ctx.fillRect(0, row.y, canvasW, row.h);
-
-    ctx.fillStyle = C.groupAccent;
-    ctx.fillRect(0, row.y, 4, row.h);
-
-    ctx.strokeStyle = C.groupBorder;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, row.y + row.h - 0.5);
-    ctx.lineTo(canvasW, row.y + row.h - 0.5);
-    ctx.stroke();
-
-    ctx.fillStyle = C.groupText;
-    ctx.font = "bold 13px sans-serif";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.fillText(row.label, 12, row.y + row.h / 2);
-
-    ctx.fillStyle = C.groupText;
-    ctx.font = "12px sans-serif";
-    ctx.textAlign = "right";
-    ctx.fillText(collapsed ? "▼" : "▲", canvasW - SCROLLBAR_W - 8, row.y + row.h / 2);
-}
 
 function drawBayRow(
     ctx: CanvasRenderingContext2D,
@@ -490,7 +442,6 @@ interface RenderParams {
     rows: CanvasRow[];
     bayRowMap: Map<string, CanvasRow>;
     bayStatusMap: Map<string, string>;
-    collapsedGroups: Set<string>;
     scrollY: number;
     canvasW: number;
     canvasH: number;
@@ -503,7 +454,7 @@ interface RenderParams {
 }
 
 function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
-    const { blocks, rows, bayRowMap, bayStatusMap, collapsedGroups, scrollY, canvasW, canvasH, showDwell, drag, rangeStart, rangeEnd, nowMin } = p;
+    const { blocks, rows, bayRowMap, bayStatusMap, scrollY, canvasW, canvasH, showDwell, drag, rangeStart, rangeEnd, nowMin } = p;
     const gridW = canvasW - BAY_LABEL_W - SCROLLBAR_W;
     const viewH = canvasH - HEADER_H;
 
@@ -532,14 +483,10 @@ function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
 
     let bayRowIdx = 0;
     for (const row of rows) {
-        if (row.y + row.h <= viewTop) { if (row.type === "bay") bayRowIdx++; continue; }
+        if (row.y + row.h <= viewTop) { bayRowIdx++; continue; }
         if (row.y >= viewBot) break;
-        if (row.type === "group") {
-            drawGroupRow(ctx, row, canvasW, collapsedGroups.has(row.groupId));
-        } else {
-            drawBayRow(ctx, row, bayRowIdx, canvasW, rangeStart, rangeEnd, gridW, showDwell, bayStatusMap.get(row.bayId ?? "") ?? "");
-            bayRowIdx++;
-        }
+        drawBayRow(ctx, row, bayRowIdx, canvasW, rangeStart, rangeEnd, gridW, showDwell, bayStatusMap.get(row.bayId ?? "") ?? "");
+        bayRowIdx++;
     }
 
     // Draw blocks
@@ -573,9 +520,7 @@ function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
 
 export function SchedulerCanvas({
     blocks,
-    groups,
-    collapsedGroups,
-    onGroupToggle,
+    bays,
     bayStatusMap,
     displayDay,
     rowHeight,
@@ -598,11 +543,9 @@ export function SchedulerCanvas({
     const scrollThumbDragRef = useRef<{ startY: number; startScrollY: number } | null>(null);
     const [hoverInfo, setHoverInfo] = useState<{ block: ScheduleBlock; clientX: number; clientY: number } | null>(null);
 
-    const hasMultipleGroups = groups.length > 1 || (groups.length === 1 && groups[0]?.id !== "__default__");
-
     const rows = useMemo(
-        () => computeRows(groups, collapsedGroups, hasMultipleGroups, rowHeight),
-        [groups, collapsedGroups, hasMultipleGroups, rowHeight]
+        () => computeRows(bays, rowHeight),
+        [bays, rowHeight]
     );
 
     const totalH = useMemo(() => {
@@ -664,7 +607,6 @@ export function SchedulerCanvas({
             rows,
             bayRowMap,
             bayStatusMap,
-            collapsedGroups,
             scrollY: scrollYRef.current,
             canvasW,
             canvasH,
@@ -675,7 +617,7 @@ export function SchedulerCanvas({
             rangeEnd: timeRangeEnd,
             nowMin: computeNowMin()
         });
-    }, [blocks, rows, bayRowMap, bayStatusMap, collapsedGroups, canvasW, canvasH, rowHeight, showDwellMarkers, timeRangeStart, timeRangeEnd, computeNowMin]);
+    }, [blocks, rows, bayRowMap, bayStatusMap, canvasW, canvasH, rowHeight, showDwellMarkers, timeRangeStart, timeRangeEnd, computeNowMin]);
 
     useEffect(() => { drawCanvas(); }, [drawCanvas]);
 
@@ -752,14 +694,6 @@ export function SchedulerCanvas({
             setHoverInfo(null);
             const { x, y } = canvasCoords(e);
 
-            if (y >= HEADER_H) {
-                const row = hitTestRow(y);
-                if (row?.type === "group") {
-                    onGroupToggle(row.groupId);
-                    return;
-                }
-            }
-
             const hit = hitTestBlock(x, y);
             const gridW = canvasW - BAY_LABEL_W - SCROLLBAR_W;
             const pxPerMin = gridW / ((timeRangeEnd - timeRangeStart) * 60);
@@ -782,7 +716,7 @@ export function SchedulerCanvas({
                 };
             }
         },
-        [hitTestRow, hitTestBlock, canvasCoords, canvasW, timeRangeStart, timeRangeEnd, rows, onGroupToggle]
+        [hitTestRow, hitTestBlock, canvasCoords, canvasW, timeRangeStart, timeRangeEnd, rows]
     );
 
     const handleMouseMove = useCallback(
@@ -791,21 +725,16 @@ export function SchedulerCanvas({
             const drag = dragRef.current;
 
             if (!drag) {
-                const row = hitTestRow(y);
                 const canvas = canvasRef.current;
                 const hit = hitTestBlock(x, y);
 
                 if (canvas) {
-                    if (row?.type === "group") {
-                        canvas.style.cursor = "pointer";
-                    } else {
-                        canvas.style.cursor =
-                            hit?.mode === "resize-left" || hit?.mode === "resize-right"
-                                ? "ew-resize"
-                                : hit?.mode === "move"
-                                ? "grab"
-                                : "default";
-                    }
+                    canvas.style.cursor =
+                        hit?.mode === "resize-left" || hit?.mode === "resize-right"
+                            ? "ew-resize"
+                            : hit?.mode === "move"
+                            ? "grab"
+                            : "default";
                 }
 
                 if (hit) {
@@ -963,7 +892,6 @@ export function SchedulerCanvas({
         : undefined;
 
     const block = hoverInfo?.block;
-    const hasCustomLines = block && (block.tooltipText || block.tooltipText2 || block.tooltipText3);
 
     return (
         <div
@@ -1000,17 +928,16 @@ export function SchedulerCanvas({
                 <div className="truck-scheduler__tooltip" style={tooltipStyle}>
                     <div className="truck-scheduler__tooltip-title">{block.truckId}</div>
                     <div className="truck-scheduler__tooltip-row">Bay: {block.bayId}</div>
-                    {block.groupId !== "__default__" && (
-                        <div className="truck-scheduler__tooltip-row">Group: {block.groupId}</div>
-                    )}
                     <div className="truck-scheduler__tooltip-row">
                         {formatMinutes(block.startMin)} – {formatMinutes(block.endMin)}
                     </div>
                     <div className="truck-scheduler__tooltip-row">Status: {block.status}</div>
-                    {hasCustomLines && <div className="truck-scheduler__tooltip-divider" />}
-                    {block.tooltipText && <div className="truck-scheduler__tooltip-extra">{block.tooltipText}</div>}
-                    {block.tooltipText2 && <div className="truck-scheduler__tooltip-extra">{block.tooltipText2}</div>}
-                    {block.tooltipText3 && <div className="truck-scheduler__tooltip-extra">{block.tooltipText3}</div>}
+                    {block.tooltipText && (
+                        <>
+                            <div className="truck-scheduler__tooltip-divider" />
+                            <div className="truck-scheduler__tooltip-extra">{block.tooltipText}</div>
+                        </>
+                    )}
                 </div>
             )}
         </div>

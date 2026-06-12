@@ -3,7 +3,7 @@ import { ObjectItem } from "mendix";
 import { ScheduleWidgetContainerProps } from "../typings/ScheduleWidgetProps";
 import { SchedulerCanvas } from "./components/SchedulerCanvas";
 import { Toolbar } from "./components/Toolbar";
-import { ScheduleBlock, BayGroup, PendingEdit, NewSlot } from "./components/types";
+import { ScheduleBlock, PendingEdit, NewSlot } from "./components/types";
 import "./ui/ScheduleWidget.css";
 
 export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElement {
@@ -17,9 +17,6 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         colorAttr,
         bayStatusAttr,
         tooltipAttr,
-        tooltipAttr2,
-        tooltipAttr3,
-        groupIdAttr,
         displayDate,
         onTruckClick,
         onScheduleChange,
@@ -35,8 +32,6 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
     } = props;
 
     const [localDisplayDay, setLocalDisplayDay] = useState<Date>(() => new Date());
-    const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
-    const [hiddenGroupIds, setHiddenGroupIds] = useState<Set<string>>(new Set());
 
     // Resolve which day to display
     const displayDay: Date = useMemo(() => {
@@ -53,7 +48,7 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
 
         const dayStart = startOfDay(displayDay);
 
-        return scheduleData.items.flatMap((item: ObjectItem): ScheduleBlock[] => {
+        return scheduleData.items.flatMap((item: ObjectItem) => {
             const truckId = (truckIdAttr.get(item).value as string) ?? "";
             const bayId = (bayIdAttr.get(item).value as string) ?? "";
             const startDate = startTimeAttr.get(item).value as Date | undefined;
@@ -62,9 +57,6 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
             const color = (colorAttr?.get(item).value as string) ?? "";
             const bayStatus = (bayStatusAttr?.get(item).value as string) ?? "";
             const tooltipText = (tooltipAttr?.get(item).value as string) ?? "";
-            const tooltipText2 = (tooltipAttr2?.get(item).value as string) ?? "";
-            const tooltipText3 = (tooltipAttr3?.get(item).value as string) ?? "";
-            const groupId = (groupIdAttr?.get(item).value as string) ?? "__default__";
 
             if (!startDate || !endDate || !bayId) return [];
 
@@ -75,61 +67,28 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
             const startMin = Math.max(0, (startDate.getTime() - dayStart) / 60000);
             const endMin = Math.min(1440, (endDate.getTime() - dayStart) / 60000);
 
-            return [{ item, truckId, bayId, groupId, startMin, endMin, status, color, isConflict: false, bayStatus, tooltipText, tooltipText2, tooltipText3 }];
+            return [{ item, truckId, bayId, groupId: "__default__", startMin, endMin, status, color, isConflict: false, bayStatus, tooltipText }];
         });
-    }, [scheduleData.status, scheduleData.items, displayDay, truckIdAttr, bayIdAttr, startTimeAttr, endTimeAttr, statusAttr, colorAttr, bayStatusAttr, tooltipAttr, tooltipAttr2, tooltipAttr3, groupIdAttr]);
+    }, [scheduleData.status, scheduleData.items, displayDay, truckIdAttr, bayIdAttr, startTimeAttr, endTimeAttr, statusAttr, colorAttr, bayStatusAttr, tooltipAttr]);
 
     // ── Conflict detection ────────────────────────────────────────────────────
     const blocks: ScheduleBlock[] = useMemo(() => detectConflicts(rawBlocks), [rawBlocks]);
 
-    // ── Derive groups from blocks ─────────────────────────────────────────────
-    const groups: BayGroup[] = useMemo(() => {
-        const map = new Map<string, { label: string; bays: Set<string> }>();
-        for (const b of blocks) {
-            if (!map.has(b.groupId)) {
-                map.set(b.groupId, {
-                    label: b.groupId === "__default__" ? "" : b.groupId,
-                    bays: new Set()
-                });
-            }
-            map.get(b.groupId)!.bays.add(b.bayId);
-        }
-        return [...map.entries()].map(([id, v]) => ({
-            id,
-            label: v.label,
-            bays: [...v.bays].sort((a, b) => naturalCompare(a, b))
-        }));
+    // ── Derive sorted flat bay list ───────────────────────────────────────────
+    const bays = useMemo(() => {
+        const set = new Set<string>();
+        for (const b of blocks) set.add(b.bayId);
+        return [...set].sort((a, b) => naturalCompare(a, b));
     }, [blocks]);
-
-    // ── Group filter ──────────────────────────────────────────────────────────
-    const filteredGroups = useMemo(() => {
-        if (hiddenGroupIds.size === 0) return groups;
-        return groups.filter(g => !hiddenGroupIds.has(g.id));
-    }, [groups, hiddenGroupIds]);
-
-    const filteredBlocks = useMemo(() => {
-        if (hiddenGroupIds.size === 0) return blocks;
-        return blocks.filter(b => !hiddenGroupIds.has(b.groupId));
-    }, [blocks, hiddenGroupIds]);
 
     // ── Bay status map: bayId → status (first non-empty value wins) ───────────
     const bayStatusMap = useMemo(() => {
         const m = new Map<string, string>();
-        for (const b of filteredBlocks) {
+        for (const b of blocks) {
             if (!m.has(b.bayId) && b.bayStatus) m.set(b.bayId, b.bayStatus);
         }
         return m;
-    }, [filteredBlocks]);
-
-    // ── Group toggle ──────────────────────────────────────────────────────────
-    const handleGroupToggle = useCallback((groupId: string) => {
-        setCollapsedGroups(prev => {
-            const next = new Set(prev);
-            if (next.has(groupId)) next.delete(groupId);
-            else next.add(groupId);
-            return next;
-        });
-    }, []);
+    }, [blocks]);
 
     // ── Day navigation ────────────────────────────────────────────────────────
     const handleDayChange = useCallback(
@@ -187,7 +146,7 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
 
     // ── Render ────────────────────────────────────────────────────────────────
     const isLoading = scheduleData.status === "loading";
-    const isEmpty = scheduleData.status === "available" && blocks.length === 0;
+    const isEmpty = scheduleData.status === "available" && bays.length === 0;
 
     // Resolve time range with safe defaults
     const rangeStart = typeof timeRangeStart === "number" ? Math.max(0, Math.min(23, timeRangeStart)) : 0;
@@ -198,9 +157,6 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
             <Toolbar
                 displayDay={displayDay}
                 onDayChange={handleDayChange}
-                groups={groups}
-                hiddenGroupIds={hiddenGroupIds}
-                onHiddenChange={setHiddenGroupIds}
             />
 
             <div className="truck-scheduler__canvas-wrapper">
@@ -211,10 +167,8 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
                     </div>
                 )}
                 <SchedulerCanvas
-                    blocks={filteredBlocks}
-                    groups={filteredGroups}
-                    collapsedGroups={collapsedGroups}
-                    onGroupToggle={handleGroupToggle}
+                    blocks={blocks}
+                    bays={bays}
                     bayStatusMap={bayStatusMap}
                     displayDay={displayDay}
                     rowHeight={rowHeight ?? 30}
