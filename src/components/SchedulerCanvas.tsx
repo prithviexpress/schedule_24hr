@@ -11,7 +11,7 @@ import React, {
 import { ScheduleBlock } from "./types";
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
-const BAY_LABEL_W = 120;
+const BAY_LABEL_W = 130;
 const HEADER_H = 36;
 const SCROLLBAR_W = 10;
 const RESIZE_HIT = 6;
@@ -35,15 +35,15 @@ const C = {
     gridMinor: "#f0ede8",
     dwellShade: "rgba(180,170,150,0.07)",
 
-    blockScheduled: "#f5c518",
-    blockScheduledText: "#6b4f00",
-    blockInProgress: "#7ec87e",
-    blockInProgressText: "#1a5218",
-    blockCompleted: "#404040",
-    blockCompletedText: "#ffffff",
-    blockConflict: "#e53935",
+    blockScheduled: "#1a1a1a",
+    blockScheduledText: "#ffffff",
+    blockInProgress: "#388e3c",
+    blockInProgressText: "#ffffff",
+    blockDelayed: "#e53935",
+    blockDelayedText: "#ffffff",
+    blockConflict: "#6d4c41",
     blockConflictText: "#ffffff",
-    blockEdge: "rgba(0,0,0,0.18)",
+    blockEdge: "rgba(255,255,255,0.15)",
 
     nowLine: "rgba(229,57,53,0.7)",
     nowPill: "#e53935",
@@ -139,6 +139,42 @@ function minToX(min: number, rangeStart: number, rangeEnd: number, gridW: number
 function xToMin(x: number, rangeStart: number, rangeEnd: number, gridW: number): number {
     const rangeMins = (rangeEnd - rangeStart) * 60;
     return rangeStart * 60 + ((x - BAY_LABEL_W) / gridW) * rangeMins;
+}
+
+// Returns true=occupied, false=available, null=unknown (don't show truck icon)
+function bayOccupied(status: string): boolean | null {
+    const s = status.toLowerCase().trim();
+    if (s === "occupied" || s === "busy" || s === "inuse" || s === "in use" || s === "active" || s === "docked") return true;
+    if (s === "available" || s === "open" || s === "free" || s === "operational" || s === "green") return false;
+    return null;
+}
+
+// Simple side-view truck icon, 16×9px centred at (cx, cy)
+function drawTruckIcon(ctx: CanvasRenderingContext2D, cx: number, cy: number, occupied: boolean, color: string): void {
+    const bw = 10, bh = 6, cabW = 5, cabOffY = 2, wr = 1.5;
+    const ox = cx - (bw + cabW) / 2;
+    const oy = cy - (bh + wr * 2 + 1) / 2;
+    ctx.save();
+    ctx.lineWidth = 1;
+    ctx.lineJoin = "round";
+    if (occupied) {
+        ctx.fillStyle = color;
+        ctx.fillRect(ox, oy, bw, bh);
+        ctx.fillRect(ox + bw, oy + cabOffY, cabW, bh - cabOffY);
+        ctx.beginPath();
+        ctx.arc(ox + 2.5, oy + bh + wr + 0.5, wr, 0, Math.PI * 2);
+        ctx.arc(ox + bw + cabW - 2.5, oy + bh + wr + 0.5, wr, 0, Math.PI * 2);
+        ctx.fill();
+    } else {
+        ctx.strokeStyle = color;
+        ctx.strokeRect(ox + 0.5, oy + 0.5, bw - 1, bh - 1);
+        ctx.strokeRect(ox + bw + 0.5, oy + cabOffY + 0.5, cabW - 1, bh - cabOffY - 1);
+        ctx.beginPath();
+        ctx.arc(ox + 2.5, oy + bh + wr + 0.5, wr, 0, Math.PI * 2);
+        ctx.arc(ox + bw + cabW - 2.5, oy + bh + wr + 0.5, wr, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+    ctx.restore();
 }
 
 // ─── Draw helpers ─────────────────────────────────────────────────────────────
@@ -345,20 +381,27 @@ function drawBayRow(
 
     const dotColor = bayStatusColor(bayStatus);
     const hasDot = !!dotColor;
+    const occupied = bayStatus ? bayOccupied(bayStatus) : null;
+    const hasTruck = occupied !== null;
 
     if (hasDot) {
-        const sqSize = Math.min(10, h - 6);
-        const sqX = 3;
-        const sqY = y + (h - sqSize) / 2;
+        const r = Math.min(4, h / 2 - 3);
+        ctx.beginPath();
+        ctx.arc(7, y + h / 2, r, 0, Math.PI * 2);
         ctx.fillStyle = dotColor;
-        ctx.fillRect(sqX, sqY, sqSize, sqSize);
+        ctx.fill();
+    }
+
+    if (hasTruck) {
+        drawTruckIcon(ctx, 26, y + h / 2, occupied!, dotColor || C.labelText);
     }
 
     ctx.fillStyle = C.labelText;
     ctx.font = "11px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    const labelCx = hasDot ? (16 + BAY_LABEL_W - 2) / 2 : BAY_LABEL_W / 2;
+    const labelStartX = hasTruck ? 38 : hasDot ? 16 : 4;
+    const labelCx = (labelStartX + BAY_LABEL_W - 4) / 2;
     ctx.fillText(row.label, labelCx, y + h / 2);
 
     ctx.restore();
@@ -368,8 +411,8 @@ function blockColors(block: ScheduleBlock): { fill: string; text: string } {
     if (block.color) return { fill: block.color, text: "#ffffff" };
     if (block.isConflict) return { fill: C.blockConflict, text: C.blockConflictText };
     const s = (block.status ?? "").toLowerCase().replace(/\s+/g, "");
-    if (s === "inprogress" || s === "docked" || s === "arriving") return { fill: C.blockInProgress, text: C.blockInProgressText };
-    if (s === "completed" || s === "done" || s === "departed") return { fill: C.blockCompleted, text: C.blockCompletedText };
+    if (s === "inprogress" || s === "completed" || s === "done" || s === "arrived" || s === "docked") return { fill: C.blockInProgress, text: C.blockInProgressText };
+    if (s === "delayed" || s === "late" || s === "overdue") return { fill: C.blockDelayed, text: C.blockDelayedText };
     return { fill: C.blockScheduled, text: C.blockScheduledText };
 }
 
@@ -924,17 +967,11 @@ export function SchedulerCanvas({
             {block && tooltipStyle && (
                 <div className="truck-scheduler__tooltip" style={tooltipStyle}>
                     <div className="truck-scheduler__tooltip-title">{block.truckId}</div>
-                    <div className="truck-scheduler__tooltip-row">Bay: {block.bayId}</div>
                     <div className="truck-scheduler__tooltip-row">
-                        {formatMinutes(block.startMin)} – {formatMinutes(block.endMin)}
+                        {block.bayId}&nbsp;&nbsp;|&nbsp;&nbsp;{formatMinutes(block.startMin)} – {formatMinutes(block.endMin)}
                     </div>
-                    <div className="truck-scheduler__tooltip-row">Status: {block.status}</div>
-                    {block.tooltipText && (
-                        <>
-                            <div className="truck-scheduler__tooltip-divider" />
-                            <div className="truck-scheduler__tooltip-extra">{block.tooltipText}</div>
-                        </>
-                    )}
+                    {block.tooltipText && <div className="truck-scheduler__tooltip-extra">{block.tooltipText}</div>}
+                    {block.tooltipText2 && <div className="truck-scheduler__tooltip-extra">{block.tooltipText2}</div>}
                 </div>
             )}
         </div>

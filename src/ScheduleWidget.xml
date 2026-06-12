@@ -83,7 +83,15 @@
 
             <property key="tooltipAttr" type="attribute" dataSource="scheduleData" required="false">
                 <caption>Tooltip Line 1</caption>
-                <description>First custom line in the hover tooltip. Use Mendix string expressions to build it from multiple variables, e.g. 'Driver: ' + $currentObject/DriverName.</description>
+                <description>First custom line in the hover tooltip.</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                </attributeTypes>
+            </property>
+
+            <property key="tooltipAttr2" type="attribute" dataSource="scheduleData" required="false">
+                <caption>Tooltip Line 2</caption>
+                <description>Second custom line in the hover tooltip.</description>
                 <attributeTypes>
                     <attributeType name="String" />
                 </attributeTypes>
