@@ -3,7 +3,7 @@ import { ObjectItem } from "mendix";
 import { ScheduleWidgetContainerProps } from "../typings/ScheduleWidgetProps";
 import { SchedulerCanvas } from "./components/SchedulerCanvas";
 import { Toolbar } from "./components/Toolbar";
-import { ScheduleBlock, PendingEdit, NewSlot } from "./components/types";
+import { ScheduleBlock, BayStatus, PendingEdit, NewSlot } from "./components/types";
 import "./ui/ScheduleWidget.css";
 
 export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElement {
@@ -15,10 +15,13 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         endTimeAttr,
         statusAttr,
         colorAttr,
-        bayStatusAttr,
         tooltipAttr,
         tooltipAttr2,
         displayDate,
+        bayData,
+        bayIdForStatusAttr,
+        bayColorAttr,
+        bayOccupancyAttr,
         onTruckClick,
         onScheduleChange,
         onEmptySlotClick,
@@ -27,6 +30,10 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         defaultDwellMinutes,
         timeRangeStart,
         timeRangeEnd,
+        colorScheduled,
+        colorInProgress,
+        colorDelayed,
+        colorConflict,
         name,
         class: cssClass,
         style
@@ -56,7 +63,6 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
             const endDate = endTimeAttr.get(item).value as Date | undefined;
             const status = (statusAttr?.get(item).value as string) ?? "Scheduled";
             const color = (colorAttr?.get(item).value as string) ?? "";
-            const bayStatus = bayStatusAttr ? (bayStatusAttr.get(item).displayValue ?? "") : "";
             const tooltipText = tooltipAttr ? (tooltipAttr.get(item).displayValue ?? "") : "";
             const tooltipText2 = tooltipAttr2 ? (tooltipAttr2.get(item).displayValue ?? "") : "";
 
@@ -69,9 +75,9 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
             const startMin = Math.max(0, (startDate.getTime() - dayStart) / 60000);
             const endMin = Math.min(1440, (endDate.getTime() - dayStart) / 60000);
 
-            return [{ item, truckId, bayId, groupId: "__default__", startMin, endMin, status, color, isConflict: false, bayStatus, tooltipText, tooltipText2 }];
+            return [{ item, truckId, bayId, groupId: "__default__", startMin, endMin, status, color, isConflict: false, tooltipText, tooltipText2 }];
         });
-    }, [scheduleData.status, scheduleData.items, displayDay, truckIdAttr, bayIdAttr, startTimeAttr, endTimeAttr, statusAttr, colorAttr, bayStatusAttr, tooltipAttr, tooltipAttr2]);
+    }, [scheduleData.status, scheduleData.items, displayDay, truckIdAttr, bayIdAttr, startTimeAttr, endTimeAttr, statusAttr, colorAttr, tooltipAttr, tooltipAttr2]);
 
     // ── Conflict detection ────────────────────────────────────────────────────
     const blocks: ScheduleBlock[] = useMemo(() => detectConflicts(rawBlocks), [rawBlocks]);
@@ -83,14 +89,23 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         return [...set].sort((a, b) => naturalCompare(a, b));
     }, [blocks]);
 
-    // ── Bay status map: bayId → status (first non-empty value wins) ───────────
+    // ── Bay status map from dedicated bayData datasource ──────────────────────
     const bayStatusMap = useMemo(() => {
-        const m = new Map<string, string>();
-        for (const b of blocks) {
-            if (!m.has(b.bayId) && b.bayStatus) m.set(b.bayId, b.bayStatus);
+        const m = new Map<string, BayStatus>();
+        if (bayData?.status !== "available" || !bayData.items || !bayIdForStatusAttr) return m;
+        for (const item of bayData.items) {
+            const bayId = bayIdForStatusAttr.get(item).displayValue ?? "";
+            if (!bayId) continue;
+            const color = bayColorAttr ? (bayColorAttr.get(item).displayValue ?? "") : "";
+            const occStr = bayOccupancyAttr ? (bayOccupancyAttr.get(item).displayValue ?? "").toLowerCase().trim() : "";
+            const occupied: boolean | null = occStr
+                ? (occStr === "yes" || occStr === "true" || occStr === "1" || occStr === "occupied" || occStr === "busy" || occStr === "docked"
+                    ? true : false)
+                : null;
+            m.set(bayId, { color, occupied });
         }
         return m;
-    }, [blocks]);
+    }, [bayData?.status, bayData?.items, bayIdForStatusAttr, bayColorAttr, bayOccupancyAttr]);
 
     // ── Day navigation ────────────────────────────────────────────────────────
     const handleDayChange = useCallback(
@@ -159,6 +174,10 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
             <Toolbar
                 displayDay={displayDay}
                 onDayChange={handleDayChange}
+                colorScheduled={colorScheduled || "rgba(135,206,235,0.82)"}
+                colorInProgress={colorInProgress || "#388e3c"}
+                colorDelayed={colorDelayed || "#e53935"}
+                colorConflict={colorConflict || "#6d4c41"}
             />
 
             <div className="truck-scheduler__canvas-wrapper">
@@ -178,6 +197,10 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
                     defaultDwellMinutes={defaultDwellMinutes ?? 25}
                     timeRangeStart={rangeStart}
                     timeRangeEnd={rangeEnd}
+                    colorScheduled={colorScheduled || "rgba(135,206,235,0.82)"}
+                    colorInProgress={colorInProgress || "#388e3c"}
+                    colorDelayed={colorDelayed || "#e53935"}
+                    colorConflict={colorConflict || "#6d4c41"}
                     onTruckClick={handleTruckClick}
                     onScheduleChange={handleScheduleChange}
                     onEmptySlotClick={handleEmptySlotClick}

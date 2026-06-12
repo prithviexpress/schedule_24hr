@@ -8,7 +8,7 @@ import React, {
     useRef,
     useState
 } from "react";
-import { ScheduleBlock } from "./types";
+import { ScheduleBlock, BayStatus } from "./types";
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
 const BAY_LABEL_W = 130;
@@ -35,8 +35,8 @@ const C = {
     gridMinor: "#f0ede8",
     dwellShade: "rgba(180,170,150,0.07)",
 
-    blockScheduled: "#1a1a1a",
-    blockScheduledText: "#ffffff",
+    blockScheduled: "rgba(135,206,235,0.82)",
+    blockScheduledText: "#003a5c",
     blockInProgress: "#388e3c",
     blockInProgressText: "#ffffff",
     blockDelayed: "#e53935",
@@ -105,13 +105,17 @@ interface CanvasRow {
 export interface SchedulerCanvasProps {
     blocks: ScheduleBlock[];
     bays: string[];
-    bayStatusMap: Map<string, string>;
+    bayStatusMap: Map<string, BayStatus>;
     displayDay: Date;
     rowHeight: number;
     showDwellMarkers: boolean;
     defaultDwellMinutes: number;
     timeRangeStart: number;
     timeRangeEnd: number;
+    colorScheduled: string;
+    colorInProgress: string;
+    colorDelayed: string;
+    colorConflict: string;
     onTruckClick: (block: ScheduleBlock) => void;
     onScheduleChange: (block: ScheduleBlock, newStartMin: number, newEndMin: number) => void;
     onEmptySlotClick: (bayId: string, startMin: number, endMin: number, defaultDwell: number) => void;
@@ -139,14 +143,6 @@ function minToX(min: number, rangeStart: number, rangeEnd: number, gridW: number
 function xToMin(x: number, rangeStart: number, rangeEnd: number, gridW: number): number {
     const rangeMins = (rangeEnd - rangeStart) * 60;
     return rangeStart * 60 + ((x - BAY_LABEL_W) / gridW) * rangeMins;
-}
-
-// Returns true=occupied, false=available, null=unknown (don't show truck icon)
-function bayOccupied(status: string): boolean | null {
-    const s = status.toLowerCase().trim();
-    if (s === "occupied" || s === "busy" || s === "inuse" || s === "in use" || s === "active" || s === "docked") return true;
-    if (s === "available" || s === "open" || s === "free" || s === "operational" || s === "green") return false;
-    return null;
 }
 
 // Simple side-view truck icon, 16×9px centred at (cx, cy)
@@ -328,7 +324,7 @@ function drawBayRow(
     rangeEnd: number,
     gridW: number,
     showDwell: boolean,
-    bayStatus: string
+    bayInfo: BayStatus | undefined
 ): void {
     const y = row.y;
     const h = row.h;
@@ -379,10 +375,10 @@ function drawBayRow(
     ctx.rect(0, y, BAY_LABEL_W - 2, h);
     ctx.clip();
 
-    const dotColor = bayStatusColor(bayStatus);
+    const dotColor = bayInfo ? bayStatusColor(bayInfo.color) : "";
     const hasDot = !!dotColor;
-    const occupied = bayStatus ? bayOccupied(bayStatus) : null;
-    const hasTruck = occupied !== null;
+    const occupied = bayInfo?.occupied ?? null;
+    const hasTruck = bayInfo !== undefined && occupied !== null;
 
     if (hasDot) {
         const r = Math.min(4, h / 2 - 3);
@@ -407,13 +403,31 @@ function drawBayRow(
     ctx.restore();
 }
 
-function blockColors(block: ScheduleBlock): { fill: string; text: string } {
+interface StatusColors {
+    scheduled: string;
+    inProgress: string;
+    delayed: string;
+    conflict: string;
+}
+
+function blockColors(block: ScheduleBlock, palette: StatusColors): { fill: string; text: string } {
     if (block.color) return { fill: block.color, text: "#ffffff" };
-    if (block.isConflict) return { fill: C.blockConflict, text: C.blockConflictText };
+    if (block.isConflict) return { fill: palette.conflict, text: "#ffffff" };
     const s = (block.status ?? "").toLowerCase().replace(/\s+/g, "");
-    if (s === "inprogress" || s === "completed" || s === "done" || s === "arrived" || s === "docked") return { fill: C.blockInProgress, text: C.blockInProgressText };
-    if (s === "delayed" || s === "late" || s === "overdue") return { fill: C.blockDelayed, text: C.blockDelayedText };
-    return { fill: C.blockScheduled, text: C.blockScheduledText };
+    if (s === "inprogress" || s === "completed" || s === "done" || s === "arrived" || s === "docked") return { fill: palette.inProgress, text: "#ffffff" };
+    if (s === "delayed" || s === "late" || s === "overdue") return { fill: palette.delayed, text: "#ffffff" };
+    // scheduled — use light text only if color is dark enough
+    const fill = palette.scheduled;
+    return { fill, text: isLightColor(fill) ? C.blockScheduledText : "#ffffff" };
+}
+
+function isLightColor(hex: string): boolean {
+    const c = hex.replace("#", "");
+    if (c.length < 6) return true;
+    const r = parseInt(c.slice(0, 2), 16);
+    const g = parseInt(c.slice(2, 4), 16);
+    const b = parseInt(c.slice(4, 6), 16);
+    return (r * 299 + g * 587 + b * 114) / 1000 > 140;
 }
 
 function drawBlock(
@@ -425,7 +439,8 @@ function drawBlock(
     rangeStart: number,
     rangeEnd: number,
     gridW: number,
-    isDragging: boolean
+    isDragging: boolean,
+    palette: StatusColors
 ): void {
     const rangeStartMin = rangeStart * 60;
     const rangeEndMin = rangeEnd * 60;
@@ -440,7 +455,7 @@ function drawBlock(
     const bh = row.h - 4;
     if (bw < 1 || bh < 1) return;
 
-    const { fill, text } = blockColors(block);
+    const { fill, text } = blockColors(block, palette);
     ctx.globalAlpha = isDragging ? 0.75 : 1;
 
     drawRoundedRect(ctx, bx, by, bw, bh, 4);
@@ -481,7 +496,7 @@ interface RenderParams {
     blocks: ScheduleBlock[];
     rows: CanvasRow[];
     bayRowMap: Map<string, CanvasRow>;
-    bayStatusMap: Map<string, string>;
+    bayStatusMap: Map<string, BayStatus>;
     scrollY: number;
     canvasW: number;
     canvasH: number;
@@ -491,10 +506,11 @@ interface RenderParams {
     rangeStart: number;
     rangeEnd: number;
     nowMin: number | null;
+    palette: StatusColors;
 }
 
 function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
-    const { blocks, rows, bayRowMap, bayStatusMap, scrollY, canvasW, canvasH, showDwell, drag, rangeStart, rangeEnd, nowMin } = p;
+    const { blocks, rows, bayRowMap, bayStatusMap, scrollY, canvasW, canvasH, showDwell, drag, rangeStart, rangeEnd, nowMin, palette } = p;
     const gridW = canvasW - BAY_LABEL_W - SCROLLBAR_W;
     const viewH = canvasH - HEADER_H;
 
@@ -525,7 +541,7 @@ function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
     for (const row of rows) {
         if (row.y + row.h <= viewTop) { bayRowIdx++; continue; }
         if (row.y >= viewBot) break;
-        drawBayRow(ctx, row, bayRowIdx, canvasW, rangeStart, rangeEnd, gridW, showDwell, bayStatusMap.get(row.bayId ?? "") ?? "");
+        drawBayRow(ctx, row, bayRowIdx, canvasW, rangeStart, rangeEnd, gridW, showDwell, bayStatusMap.get(row.bayId ?? ""));
         bayRowIdx++;
     }
 
@@ -545,7 +561,7 @@ function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
         }
         if (endMin <= rangeStartMin || startMin >= rangeEndMin) continue;
         if (row.y + row.h <= viewTop || row.y >= viewBot) continue;
-        drawBlock(ctx, block, row, startMin, endMin, rangeStart, rangeEnd, gridW, drag?.block.item === block.item);
+        drawBlock(ctx, block, row, startMin, endMin, rangeStart, rangeEnd, gridW, drag?.block.item === block.item, palette);
     }
 
     // Current-time dashed line in content area (drawn on top of blocks)
@@ -568,6 +584,10 @@ export function SchedulerCanvas({
     defaultDwellMinutes,
     timeRangeStart,
     timeRangeEnd,
+    colorScheduled,
+    colorInProgress,
+    colorDelayed,
+    colorConflict,
     onTruckClick,
     onScheduleChange,
     onEmptySlotClick
@@ -642,6 +662,12 @@ export function SchedulerCanvas({
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
+        const palette: StatusColors = {
+            scheduled: colorScheduled || C.blockScheduled,
+            inProgress: colorInProgress || C.blockInProgress,
+            delayed: colorDelayed || C.blockDelayed,
+            conflict: colorConflict || C.blockConflict
+        };
         renderCanvas(ctx, {
             blocks,
             rows,
@@ -655,9 +681,10 @@ export function SchedulerCanvas({
             drag: dragRef.current,
             rangeStart: timeRangeStart,
             rangeEnd: timeRangeEnd,
-            nowMin: computeNowMin()
+            nowMin: computeNowMin(),
+            palette
         });
-    }, [blocks, rows, bayRowMap, bayStatusMap, canvasW, canvasH, rowHeight, showDwellMarkers, timeRangeStart, timeRangeEnd, computeNowMin]);
+    }, [blocks, rows, bayRowMap, bayStatusMap, canvasW, canvasH, rowHeight, showDwellMarkers, timeRangeStart, timeRangeEnd, colorScheduled, colorInProgress, colorDelayed, colorConflict, computeNowMin]);
 
     useEffect(() => { drawCanvas(); }, [drawCanvas]);
 

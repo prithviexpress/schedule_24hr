@@ -5,14 +5,18 @@ export interface ScheduleBlock {
     truckId: string;
     bayId: string;
     groupId: string;
-    startMin: number;  // minutes from midnight, 0–1440
-    endMin: number;    // minutes from midnight, 0–1440
+    startMin: number;
+    endMin: number;
     status: string;
     color: string;
     isConflict: boolean;
-    bayStatus?: string;
     tooltipText?: string;
     tooltipText2?: string;
+}
+
+export interface BayStatus {
+    color: string;      // raw string passed to bayStatusColor()
+    occupied: boolean | null;
 }
 
 export interface BayGroup {

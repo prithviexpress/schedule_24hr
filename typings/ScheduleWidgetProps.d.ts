@@ -18,10 +18,13 @@ export interface ScheduleWidgetContainerProps {
     endTimeAttr: ListAttributeValue<Date>;
     statusAttr?: ListAttributeValue<string>;
     colorAttr?: ListAttributeValue<string>;
-    bayStatusAttr?: ListAttributeValue<string>;
     tooltipAttr?: ListAttributeValue<string>;
     tooltipAttr2?: ListAttributeValue<string>;
     displayDate?: EditableValue<Date | string>;
+    bayData?: ListValue;
+    bayIdForStatusAttr?: ListAttributeValue<string>;
+    bayColorAttr?: ListAttributeValue<string>;
+    bayOccupancyAttr?: ListAttributeValue<string | boolean>;
     onTruckClick?: ListActionValue;
     onScheduleChange?: ListActionValue;
     onEmptySlotClick?: ActionValue;
@@ -30,6 +33,10 @@ export interface ScheduleWidgetContainerProps {
     timeRangeEnd: number;
     showDwellMarkers: boolean;
     defaultDwellMinutes: number;
+    colorScheduled: string;
+    colorInProgress: string;
+    colorDelayed: string;
+    colorConflict: string;
 }
 
 export interface ScheduleWidgetPreviewProps {
@@ -50,10 +57,13 @@ export interface ScheduleWidgetPreviewProps {
     endTimeAttr: string;
     statusAttr: string;
     colorAttr: string;
-    bayStatusAttr: string;
     tooltipAttr: string;
     tooltipAttr2: string;
     displayDate: string;
+    bayData: {} | { caption: string } | { type: string } | null;
+    bayIdForStatusAttr: string;
+    bayColorAttr: string;
+    bayOccupancyAttr: string;
     onTruckClick: {} | null;
     onScheduleChange: {} | null;
     onEmptySlotClick: {} | null;
@@ -62,4 +72,8 @@ export interface ScheduleWidgetPreviewProps {
     timeRangeEnd: number | null;
     showDwellMarkers: boolean;
     defaultDwellMinutes: number | null;
+    colorScheduled: string;
+    colorInProgress: string;
+    colorDelayed: string;
+    colorConflict: string;
 }

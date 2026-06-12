@@ -72,15 +72,6 @@
                 </attributeTypes>
             </property>
 
-            <property key="bayStatusAttr" type="attribute" dataSource="scheduleData" required="false">
-                <caption>Bay Status</caption>
-                <description>Optional attribute for the bay's operational status. Accepted values: "available" (green), "occupied" (blue), "maintenance" (red). Also accepts any CSS color string. Shows as a small dot to the left of the bay label.</description>
-                <attributeTypes>
-                    <attributeType name="String" />
-                    <attributeType name="Enum" />
-                </attributeTypes>
-            </property>
-
             <property key="tooltipAttr" type="attribute" dataSource="scheduleData" required="false">
                 <caption>Tooltip Line 1</caption>
                 <description>First custom line in the hover tooltip.</description>
@@ -103,6 +94,44 @@
                 <attributeTypes>
                     <attributeType name="DateTime" />
                     <attributeType name="String" />
+                </attributeTypes>
+            </property>
+
+        </propertyGroup>
+
+        <!-- ═══════════ BAY STATUS ═══════════ -->
+        <propertyGroup caption="Bay Status">
+
+            <property key="bayData" type="datasource" isList="true" required="false">
+                <caption>Bay Status Data</caption>
+                <description>Separate list of bay objects — one row per bay. Provides the status circle color and truck occupancy icon in bay labels.</description>
+            </property>
+
+            <property key="bayIdForStatusAttr" type="attribute" dataSource="bayData" required="false">
+                <caption>Bay ID</caption>
+                <description>Attribute identifying the bay — must match the Bay ID values in Schedule Data.</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                    <attributeType name="Enum" />
+                </attributeTypes>
+            </property>
+
+            <property key="bayColorAttr" type="attribute" dataSource="bayData" required="false">
+                <caption>Color</caption>
+                <description>Bay status color for the indicator circle. Accepted values: "available"/"green" → green, "occupied"/"blue" → blue, "maintenance"/"red" → red, or any CSS hex color (#rrggbb).</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                    <attributeType name="Enum" />
+                </attributeTypes>
+            </property>
+
+            <property key="bayOccupancyAttr" type="attribute" dataSource="bayData" required="false">
+                <caption>Occupancy</caption>
+                <description>Controls the truck icon: "occupied"/"yes"/"true" → filled truck; "available"/"no"/"false" → outlined truck.</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                    <attributeType name="Enum" />
+                    <attributeType name="Boolean" />
                 </attributeTypes>
             </property>
 
@@ -154,6 +183,26 @@
             <property key="defaultDwellMinutes" type="integer" defaultValue="25" required="true">
                 <caption>Default Dwell Duration (minutes)</caption>
                 <description>Duration used for new truck blocks created by clicking an empty slot. Default 25 minutes.</description>
+            </property>
+
+            <property key="colorScheduled" type="string" defaultValue="rgba(135,206,235,0.82)" required="false">
+                <caption>Color: Scheduled</caption>
+                <description>Block fill color for "Scheduled" status. Accepts any CSS color value, e.g. #87ceeb or rgba(135,206,235,0.82).</description>
+            </property>
+
+            <property key="colorInProgress" type="string" defaultValue="#388e3c" required="false">
+                <caption>Color: In Progress / Completed</caption>
+                <description>Block fill color for "InProgress" and "Completed" statuses.</description>
+            </property>
+
+            <property key="colorDelayed" type="string" defaultValue="#e53935" required="false">
+                <caption>Color: Delayed</caption>
+                <description>Block fill color for "Delayed" status.</description>
+            </property>
+
+            <property key="colorConflict" type="string" defaultValue="#6d4c41" required="false">
+                <caption>Color: Conflict</caption>
+                <description>Block fill color when two trucks overlap the same bay.</description>
             </property>
 
         </propertyGroup>

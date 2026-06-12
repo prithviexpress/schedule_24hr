@@ -3,6 +3,10 @@ import React, { ReactElement } from "react";
 interface ToolbarProps {
     displayDay: Date;
     onDayChange: (d: Date) => void;
+    colorScheduled: string;
+    colorInProgress: string;
+    colorDelayed: string;
+    colorConflict: string;
 }
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -18,7 +22,7 @@ function shiftDay(d: Date, delta: number): Date {
     return n;
 }
 
-export function Toolbar({ displayDay, onDayChange }: ToolbarProps): ReactElement {
+export function Toolbar({ displayDay, onDayChange, colorScheduled, colorInProgress, colorDelayed, colorConflict }: ToolbarProps): ReactElement {
     return (
         <div className="truck-scheduler__toolbar">
             <div className="truck-scheduler__date-nav">
@@ -32,19 +36,19 @@ export function Toolbar({ displayDay, onDayChange }: ToolbarProps): ReactElement
             </div>
 
             <div className="truck-scheduler__toolbar-right">
-                <Legend />
+                <Legend scheduled={colorScheduled} inProgress={colorInProgress} delayed={colorDelayed} conflict={colorConflict} />
             </div>
         </div>
     );
 }
 
-function Legend(): ReactElement {
+function Legend({ scheduled, inProgress, delayed, conflict }: { scheduled: string; inProgress: string; delayed: string; conflict: string }): ReactElement {
     return (
         <div className="truck-scheduler__legend">
-            <LegendItem color="#1a1a1a" label="Scheduled" />
-            <LegendItem color="#388e3c" label="In Progress / Completed" />
-            <LegendItem color="#e53935" label="Delayed" />
-            <LegendItem color="#6d4c41" label="Conflict" />
+            <LegendItem color={scheduled} label="Scheduled" />
+            <LegendItem color={inProgress} label="In Progress / Completed" />
+            <LegendItem color={delayed} label="Delayed" />
+            <LegendItem color={conflict} label="Conflict" />
         </div>
     );
 }
