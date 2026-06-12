@@ -1,4 +1,4 @@
-import React, { ReactElement, useCallback, useMemo, useState } from "react";
+import React, { ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ObjectItem } from "mendix";
 import { ScheduleWidgetContainerProps } from "../typings/ScheduleWidgetProps";
 import { SchedulerCanvas } from "./components/SchedulerCanvas";
@@ -40,6 +40,14 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
     } = props;
 
     const [localDisplayDay, setLocalDisplayDay] = useState<Date>(() => new Date());
+
+    // Reload bay status every 60 s — same cadence as the current-time line
+    const bayDataRef = useRef(bayData);
+    useEffect(() => { bayDataRef.current = bayData; });
+    useEffect(() => {
+        const id = setInterval(() => { bayDataRef.current?.reload(); }, 60000);
+        return () => clearInterval(id);
+    }, []);
 
     // Resolve which day to display
     const displayDay: Date = useMemo(() => {
