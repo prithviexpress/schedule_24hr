@@ -173,13 +173,13 @@ function drawTruckIcon(ctx: CanvasRenderingContext2D, cx: number, cy: number, oc
         // Cargo body
         ctx.fillRect(ox, oy, bw, bh);
 
-        // Cab — angled windshield
+        // Cab — windshield angled on RIGHT side (truck faces right)
         ctx.beginPath();
-        ctx.moveTo(cabX,           cabTopY + ch * 0.32);
-        ctx.lineTo(cabX + cw * 0.5, cabTopY);
-        ctx.lineTo(cabX + cw,       cabTopY);
-        ctx.lineTo(cabX + cw,       oy + bh);
-        ctx.lineTo(cabX,            oy + bh);
+        ctx.moveTo(cabX,             cabTopY);
+        ctx.lineTo(cabX + cw * 0.5,  cabTopY);
+        ctx.lineTo(cabX + cw,        cabTopY + ch * 0.32);
+        ctx.lineTo(cabX + cw,        oy + bh);
+        ctx.lineTo(cabX,             oy + bh);
         ctx.closePath();
         ctx.fill();
 
@@ -193,12 +193,12 @@ function drawTruckIcon(ctx: CanvasRenderingContext2D, cx: number, cy: number, oc
         // Cargo body
         ctx.strokeRect(ox + 0.75, oy + 0.75, bw - 1.5, bh - 1.5);
 
-        // Cab
+        // Cab — windshield angled on RIGHT side (truck faces right)
         ctx.beginPath();
-        ctx.moveTo(cabX + 0.75,              cabTopY + ch * 0.32);
+        ctx.moveTo(cabX + 0.75,              cabTopY + 0.75);
         ctx.lineTo(cabX + cw * 0.5,          cabTopY + 0.75);
-        ctx.lineTo(cabX + cw - 0.75,          cabTopY + 0.75);
-        ctx.lineTo(cabX + cw - 0.75,          oy + bh - 0.75);
+        ctx.lineTo(cabX + cw - 0.75,         cabTopY + ch * 0.32);
+        ctx.lineTo(cabX + cw - 0.75,         oy + bh - 0.75);
         ctx.lineTo(cabX + 0.75,              oy + bh - 0.75);
         ctx.closePath();
         ctx.stroke();
