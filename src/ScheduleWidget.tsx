@@ -174,10 +174,10 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
             <Toolbar
                 displayDay={displayDay}
                 onDayChange={handleDayChange}
-                colorScheduled={colorScheduled || "rgba(135,206,235,0.82)"}
-                colorInProgress={colorInProgress || "#388e3c"}
-                colorDelayed={colorDelayed || "#e53935"}
-                colorConflict={colorConflict || "#6d4c41"}
+                colorScheduled={colorScheduled || "#1565C0"}
+                colorInProgress={colorInProgress || "#2E7D32"}
+                colorDelayed={colorDelayed || "#D84315"}
+                colorConflict={colorConflict || "#4527A0"}
             />
 
             <div className="truck-scheduler__canvas-wrapper">
@@ -197,10 +197,10 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
                     defaultDwellMinutes={defaultDwellMinutes ?? 25}
                     timeRangeStart={rangeStart}
                     timeRangeEnd={rangeEnd}
-                    colorScheduled={colorScheduled || "rgba(135,206,235,0.82)"}
-                    colorInProgress={colorInProgress || "#388e3c"}
-                    colorDelayed={colorDelayed || "#e53935"}
-                    colorConflict={colorConflict || "#6d4c41"}
+                    colorScheduled={colorScheduled || "#1565C0"}
+                    colorInProgress={colorInProgress || "#2E7D32"}
+                    colorDelayed={colorDelayed || "#D84315"}
+                    colorConflict={colorConflict || "#4527A0"}
                     onTruckClick={handleTruckClick}
                     onScheduleChange={handleScheduleChange}
                     onEmptySlotClick={handleEmptySlotClick}

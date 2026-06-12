@@ -36,7 +36,12 @@ export function Toolbar({ displayDay, onDayChange, colorScheduled, colorInProgre
             </div>
 
             <div className="truck-scheduler__toolbar-right">
-                <Legend scheduled={colorScheduled} inProgress={colorInProgress} delayed={colorDelayed} conflict={colorConflict} />
+                <Legend
+                scheduled={colorScheduled || "#1565C0"}
+                inProgress={colorInProgress || "#2E7D32"}
+                delayed={colorDelayed || "#D84315"}
+                conflict={colorConflict || "#4527A0"}
+            />
             </div>
         </div>
     );

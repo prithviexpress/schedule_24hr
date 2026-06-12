@@ -35,13 +35,13 @@ const C = {
     gridMinor: "#f0ede8",
     dwellShade: "rgba(180,170,150,0.07)",
 
-    blockScheduled: "rgba(135,206,235,0.82)",
-    blockScheduledText: "#003a5c",
-    blockInProgress: "#388e3c",
+    blockScheduled: "#1565C0",
+    blockScheduledText: "#ffffff",
+    blockInProgress: "#2E7D32",
     blockInProgressText: "#ffffff",
-    blockDelayed: "#e53935",
+    blockDelayed: "#D84315",
     blockDelayedText: "#ffffff",
-    blockConflict: "#6d4c41",
+    blockConflict: "#4527A0",
     blockConflictText: "#ffffff",
     blockEdge: "rgba(255,255,255,0.15)",
 
