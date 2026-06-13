@@ -176,6 +176,11 @@
                 <description>Pixel height of each bay row in the grid. Default 30. Increase for touch devices.</description>
             </property>
 
+            <property key="resourceLabel" type="string" defaultValue="Resource" required="false">
+                <caption>Resource Column Label</caption>
+                <description>Header text for the left-hand resource column — e.g. "Bay", "Truck", "Dock", "Gate".</description>
+            </property>
+
             <property key="rowsPerPage" type="integer" defaultValue="20" required="true">
                 <caption>Rows Per Page</caption>
                 <description>Maximum number of bay rows visible at once. Navigation arrows page through the rest. Set to 0 to show all rows.</description>

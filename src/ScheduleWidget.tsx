@@ -27,6 +27,7 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         onScheduleChange,
         onEmptySlotClick,
         rowHeight,
+        resourceLabel,
         rowsPerPage,
         showDwellMarkers,
         defaultDwellMinutes,
@@ -45,11 +46,16 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
 
     const [localDisplayDay, setLocalDisplayDay] = useState<Date>(() => new Date());
 
-    // Reload bay status every 60 s — same cadence as the current-time line
+    // Reload all data every 60 s — same cadence as the current-time line
     const bayDataRef = useRef(bayData);
+    const scheduleDataRef = useRef(scheduleData);
     useEffect(() => { bayDataRef.current = bayData; });
+    useEffect(() => { scheduleDataRef.current = scheduleData; });
     useEffect(() => {
-        const id = setInterval(() => { bayDataRef.current?.reload(); }, 60000);
+        const id = setInterval(() => {
+            bayDataRef.current?.reload();
+            scheduleDataRef.current?.reload();
+        }, 60000);
         return () => clearInterval(id);
     }, []);
 
@@ -255,6 +261,7 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
                     bays={pagedBays}
                     bayStatusMap={bayStatusMap}
                     displayDay={displayDay}
+                    resourceLabel={resourceLabel || "Resource"}
                     rowHeight={rowHeight ?? 30}
                     showDwellMarkers={showDwellMarkers ?? true}
                     defaultDwellMinutes={defaultDwellMinutes ?? 25}

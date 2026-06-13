@@ -107,6 +107,7 @@ export interface SchedulerCanvasProps {
     bays: string[];
     bayStatusMap: Map<string, BayStatus>;
     displayDay: Date;
+    resourceLabel: string;
     rowHeight: number;
     showDwellMarkers: boolean;
     defaultDwellMinutes: number;
@@ -234,7 +235,8 @@ function drawHeader(
     rangeStart: number,
     rangeEnd: number,
     gridW: number,
-    showDwell: boolean
+    showDwell: boolean,
+    resourceLabel: string
 ): void {
     ctx.fillStyle = C.headerBg;
     ctx.fillRect(0, 0, canvasW, HEADER_H);
@@ -243,7 +245,7 @@ function drawHeader(
     ctx.font = "bold 11px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("Resource", BAY_LABEL_W / 2, HEADER_H / 2);
+    ctx.fillText(resourceLabel || "Resource", BAY_LABEL_W / 2, HEADER_H / 2);
 
     ctx.strokeStyle = C.headerBorder;
     ctx.lineWidth = 1;
@@ -539,10 +541,11 @@ interface RenderParams {
     rangeEnd: number;
     nowMin: number | null;
     palette: StatusColors;
+    resourceLabel: string;
 }
 
 function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
-    const { blocks, rows, bayRowMap, bayStatusMap, scrollY, canvasW, canvasH, showDwell, drag, rangeStart, rangeEnd, nowMin, palette } = p;
+    const { blocks, rows, bayRowMap, bayStatusMap, scrollY, canvasW, canvasH, showDwell, drag, rangeStart, rangeEnd, nowMin, palette, resourceLabel } = p;
     const gridW = canvasW - BAY_LABEL_W - SCROLLBAR_W;
     const viewH = canvasH - HEADER_H;
 
@@ -551,7 +554,7 @@ function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
     ctx.fillRect(0, 0, canvasW, canvasH);
 
     // Fixed header
-    drawHeader(ctx, canvasW, rangeStart, rangeEnd, gridW, showDwell);
+    drawHeader(ctx, canvasW, rangeStart, rangeEnd, gridW, showDwell, resourceLabel);
 
     // Current-time pill in header (drawn on top of header, before clip)
     const inRange = nowMin !== null && nowMin > rangeStart * 60 && nowMin < rangeEnd * 60;
@@ -611,6 +614,7 @@ export function SchedulerCanvas({
     bays,
     bayStatusMap,
     displayDay,
+    resourceLabel,
     rowHeight,
     showDwellMarkers,
     defaultDwellMinutes,
@@ -714,9 +718,10 @@ export function SchedulerCanvas({
             rangeStart: timeRangeStart,
             rangeEnd: timeRangeEnd,
             nowMin: computeNowMin(),
-            palette
+            palette,
+            resourceLabel: resourceLabel || "Resource"
         });
-    }, [blocks, rows, bayRowMap, bayStatusMap, canvasW, canvasH, rowHeight, showDwellMarkers, timeRangeStart, timeRangeEnd, colorScheduled, colorInProgress, colorDelayed, colorConflict, computeNowMin]);
+    }, [blocks, rows, bayRowMap, bayStatusMap, canvasW, canvasH, rowHeight, showDwellMarkers, timeRangeStart, timeRangeEnd, colorScheduled, colorInProgress, colorDelayed, colorConflict, resourceLabel, computeNowMin]);
 
     useEffect(() => { drawCanvas(); }, [drawCanvas]);
 
