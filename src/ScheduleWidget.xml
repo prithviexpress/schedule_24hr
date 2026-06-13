@@ -135,6 +135,17 @@
                 </attributeTypes>
             </property>
 
+            <property key="baySortAttr" type="attribute" dataSource="bayData" required="false">
+                <caption>Sort Order</caption>
+                <description>Numeric attribute defining row display order — lower numbers appear first. When empty, rows are sorted by natural sort (e.g. Bay-2 before Bay-10).</description>
+                <attributeTypes>
+                    <attributeType name="Integer" />
+                    <attributeType name="Long" />
+                    <attributeType name="Decimal" />
+                    <attributeType name="AutoNumber" />
+                </attributeTypes>
+            </property>
+
         </propertyGroup>
 
         <!-- ═══════════ ACTIONS ═══════════ -->

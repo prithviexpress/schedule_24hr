@@ -26,6 +26,7 @@ export interface ScheduleWidgetContainerProps {
     bayIdForStatusAttr?: ListAttributeValue<string>;
     bayColorAttr?: ListAttributeValue<string>;
     bayOccupancyAttr?: ListAttributeValue<string | boolean>;
+    baySortAttr?: ListAttributeValue<Big>;
     onTruckClick?: ListActionValue;
     onScheduleChange?: ListActionValue;
     onEmptySlotClick?: ActionValue;
@@ -68,6 +69,7 @@ export interface ScheduleWidgetPreviewProps {
     bayIdForStatusAttr: string;
     bayColorAttr: string;
     bayOccupancyAttr: string;
+    baySortAttr: string;
     onTruckClick: {} | null;
     onScheduleChange: {} | null;
     onEmptySlotClick: {} | null;

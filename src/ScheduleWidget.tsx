@@ -22,6 +22,7 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         bayIdForStatusAttr,
         bayColorAttr,
         bayOccupancyAttr,
+        baySortAttr,
         onTruckClick,
         onScheduleChange,
         onEmptySlotClick,
@@ -96,27 +97,6 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
     // ── Conflict detection ────────────────────────────────────────────────────
     const blocks: ScheduleBlock[] = useMemo(() => detectConflicts(rawBlocks), [rawBlocks]);
 
-    // ── Derive sorted flat bay list ───────────────────────────────────────────
-    const bays = useMemo(() => {
-        const set = new Set<string>();
-        for (const b of blocks) set.add(b.bayId);
-        return [...set].sort((a, b) => naturalCompare(a, b));
-    }, [blocks]);
-
-    // Reset to page 0 whenever the bay list changes (day nav, data reload)
-    const prevBaysRef = useRef(bays);
-    useEffect(() => {
-        if (prevBaysRef.current !== bays) {
-            prevBaysRef.current = bays;
-            setPageIndex(0);
-        }
-    }, [bays]);
-
-    // ── Pagination ────────────────────────────────────────────────────────────
-    const effectiveRowsPerPage = rowsPerPage > 0 ? rowsPerPage : bays.length || 1;
-    const totalPages = Math.max(1, Math.ceil(bays.length / effectiveRowsPerPage));
-    const pagedBays = bays.slice(pageIndex * effectiveRowsPerPage, (pageIndex + 1) * effectiveRowsPerPage);
-
     // ── Bay status map from dedicated bayData datasource ──────────────────────
     const bayStatusMap = useMemo(() => {
         const m = new Map<string, BayStatus>();
@@ -134,6 +114,49 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         }
         return m;
     }, [bayData?.status, bayData?.items, bayIdForStatusAttr, bayColorAttr, bayOccupancyAttr]);
+
+    // ── Bay sort order map (optional) ─────────────────────────────────────────
+    const baySortMap = useMemo(() => {
+        const m = new Map<string, number>();
+        if (bayData?.status !== "available" || !bayData.items || !bayIdForStatusAttr || !baySortAttr) return m;
+        for (const item of bayData.items) {
+            const bayId = bayIdForStatusAttr.get(item).displayValue ?? "";
+            if (!bayId) continue;
+            const v = baySortAttr.get(item).value;
+            if (v != null) m.set(bayId, Number(v));
+        }
+        return m;
+    }, [bayData?.status, bayData?.items, bayIdForStatusAttr, baySortAttr]);
+
+    // ── Derive sorted flat bay list ───────────────────────────────────────────
+    const bays = useMemo(() => {
+        const set = new Set<string>();
+        for (const b of blocks) set.add(b.bayId);
+        return [...set].sort((a, b) => {
+            if (baySortMap.size > 0) {
+                const sa = baySortMap.get(a);
+                const sb = baySortMap.get(b);
+                if (sa != null && sb != null) return sa - sb;
+                if (sa != null) return -1;   // sorted bays first
+                if (sb != null) return 1;
+            }
+            return naturalCompare(a, b);     // fallback: natural sort
+        });
+    }, [blocks, baySortMap]);
+
+    // Reset to page 0 whenever the bay list changes (day nav, data reload)
+    const prevBaysRef = useRef(bays);
+    useEffect(() => {
+        if (prevBaysRef.current !== bays) {
+            prevBaysRef.current = bays;
+            setPageIndex(0);
+        }
+    }, [bays]);
+
+    // ── Pagination ────────────────────────────────────────────────────────────
+    const effectiveRowsPerPage = rowsPerPage > 0 ? rowsPerPage : bays.length || 1;
+    const totalPages = Math.max(1, Math.ceil(bays.length / effectiveRowsPerPage));
+    const pagedBays = bays.slice(pageIndex * effectiveRowsPerPage, (pageIndex + 1) * effectiveRowsPerPage);
 
     // ── Day navigation ────────────────────────────────────────────────────────
     const handleDayChange = useCallback(
