@@ -5,6 +5,7 @@
  */
 import { CSSProperties } from "react";
 import { ActionValue, EditableValue, ListValue, ListActionValue, ListAttributeValue } from "mendix";
+import { Big } from "big.js";
 
 export interface ScheduleWidgetContainerProps {
     name: string;
@@ -29,8 +30,11 @@ export interface ScheduleWidgetContainerProps {
     onScheduleChange?: ListActionValue;
     onEmptySlotClick?: ActionValue;
     rowHeight: number;
+    rowsPerPage: number;
     timeRangeStart: number;
     timeRangeEnd: number;
+    timeRangeStartVar?: EditableValue<Big>;
+    timeRangeEndVar?: EditableValue<Big>;
     showDwellMarkers: boolean;
     defaultDwellMinutes: number;
     colorScheduled: string;
@@ -68,8 +72,11 @@ export interface ScheduleWidgetPreviewProps {
     onScheduleChange: {} | null;
     onEmptySlotClick: {} | null;
     rowHeight: number | null;
+    rowsPerPage: number | null;
     timeRangeStart: number | null;
     timeRangeEnd: number | null;
+    timeRangeStartVar: string;
+    timeRangeEndVar: string;
     showDwellMarkers: boolean;
     defaultDwellMinutes: number | null;
     colorScheduled: string;

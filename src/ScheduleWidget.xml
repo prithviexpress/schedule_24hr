@@ -165,14 +165,37 @@
                 <description>Pixel height of each bay row in the grid. Default 30. Increase for touch devices.</description>
             </property>
 
+            <property key="rowsPerPage" type="integer" defaultValue="20" required="true">
+                <caption>Rows Per Page</caption>
+                <description>Maximum number of bay rows visible at once. Navigation arrows page through the rest. Set to 0 to show all rows.</description>
+            </property>
+
             <property key="timeRangeStart" type="integer" defaultValue="0" required="true">
                 <caption>Time Range Start (hour 0-23)</caption>
-                <description>First hour shown on timeline. 0 = midnight. Set to 6 for 06:00 start.</description>
+                <description>First hour shown on timeline. 0 = midnight. Overridden by Time Range Start Variable if set.</description>
             </property>
 
             <property key="timeRangeEnd" type="integer" defaultValue="24" required="true">
                 <caption>Time Range End (hour 1-24)</caption>
-                <description>Last hour shown on timeline. 24 = midnight. Set to 18 for 18:00 end.</description>
+                <description>Last hour shown on timeline. 24 = midnight. Overridden by Time Range End Variable if set.</description>
+            </property>
+
+            <property key="timeRangeStartVar" type="attribute" required="false">
+                <caption>Time Range Start (variable)</caption>
+                <description>Page integer variable that dynamically overrides the static Time Range Start setting.</description>
+                <attributeTypes>
+                    <attributeType name="Integer" />
+                    <attributeType name="Long" />
+                </attributeTypes>
+            </property>
+
+            <property key="timeRangeEndVar" type="attribute" required="false">
+                <caption>Time Range End (variable)</caption>
+                <description>Page integer variable that dynamically overrides the static Time Range End setting.</description>
+                <attributeTypes>
+                    <attributeType name="Integer" />
+                    <attributeType name="Long" />
+                </attributeTypes>
             </property>
 
             <property key="showDwellMarkers" type="boolean" defaultValue="true" required="true">

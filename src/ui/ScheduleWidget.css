@@ -60,6 +60,27 @@
     color: #222;
 }
 
+.truck-scheduler__pagination {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.truck-scheduler__page-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: #555;
+    min-width: 120px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.truck-scheduler__nav-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+    pointer-events: none;
+}
+
 .truck-scheduler__toolbar-right {
     display: flex;
     align-items: center;

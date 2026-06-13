@@ -26,10 +26,13 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         onScheduleChange,
         onEmptySlotClick,
         rowHeight,
+        rowsPerPage,
         showDwellMarkers,
         defaultDwellMinutes,
         timeRangeStart,
         timeRangeEnd,
+        timeRangeStartVar,
+        timeRangeEndVar,
         colorScheduled,
         colorInProgress,
         colorDelayed,
@@ -48,6 +51,9 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         const id = setInterval(() => { bayDataRef.current?.reload(); }, 60000);
         return () => clearInterval(id);
     }, []);
+
+    // Pagination
+    const [pageIndex, setPageIndex] = useState(0);
 
     // Resolve which day to display
     const displayDay: Date = useMemo(() => {
@@ -96,6 +102,20 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         for (const b of blocks) set.add(b.bayId);
         return [...set].sort((a, b) => naturalCompare(a, b));
     }, [blocks]);
+
+    // Reset to page 0 whenever the bay list changes (day nav, data reload)
+    const prevBaysRef = useRef(bays);
+    useEffect(() => {
+        if (prevBaysRef.current !== bays) {
+            prevBaysRef.current = bays;
+            setPageIndex(0);
+        }
+    }, [bays]);
+
+    // ── Pagination ────────────────────────────────────────────────────────────
+    const effectiveRowsPerPage = rowsPerPage > 0 ? rowsPerPage : bays.length || 1;
+    const totalPages = Math.max(1, Math.ceil(bays.length / effectiveRowsPerPage));
+    const pagedBays = bays.slice(pageIndex * effectiveRowsPerPage, (pageIndex + 1) * effectiveRowsPerPage);
 
     // ── Bay status map from dedicated bayData datasource ──────────────────────
     const bayStatusMap = useMemo(() => {
@@ -173,9 +193,16 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
     const isLoading = scheduleData.status === "loading";
     const isEmpty = scheduleData.status === "available" && bays.length === 0;
 
-    // Resolve time range with safe defaults
-    const rangeStart = typeof timeRangeStart === "number" ? Math.max(0, Math.min(23, timeRangeStart)) : 0;
-    const rangeEnd = typeof timeRangeEnd === "number" ? Math.max(rangeStart + 1, Math.min(24, timeRangeEnd)) : 24;
+    // Time range: external variable wins over static setting
+    const resolveHour = (varProp: any, staticVal: number, min: number, max: number) => {
+        if (varProp?.value != null) {
+            const v = Number(varProp.value);
+            if (!isNaN(v)) return Math.max(min, Math.min(max, v));
+        }
+        return typeof staticVal === "number" ? Math.max(min, Math.min(max, staticVal)) : min;
+    };
+    const rangeStart = resolveHour(timeRangeStartVar, timeRangeStart, 0, 23);
+    const rangeEnd   = resolveHour(timeRangeEndVar,   timeRangeEnd,   rangeStart + 1, 24);
 
     return (
         <div id={name} className={`truck-scheduler${cssClass ? ` ${cssClass}` : ""}`} style={style}>
@@ -186,6 +213,11 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
                 colorInProgress={colorInProgress || "#2E7D32"}
                 colorDelayed={colorDelayed || "#D84315"}
                 colorConflict={colorConflict || "#4527A0"}
+                pageIndex={pageIndex}
+                totalPages={totalPages}
+                totalBays={bays.length}
+                rowsPerPage={effectiveRowsPerPage}
+                onPageChange={setPageIndex}
             />
 
             <div className="truck-scheduler__canvas-wrapper">
@@ -197,7 +229,7 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
                 )}
                 <SchedulerCanvas
                     blocks={blocks}
-                    bays={bays}
+                    bays={pagedBays}
                     bayStatusMap={bayStatusMap}
                     displayDay={displayDay}
                     rowHeight={rowHeight ?? 30}

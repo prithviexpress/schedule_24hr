@@ -7,6 +7,11 @@ interface ToolbarProps {
     colorInProgress: string;
     colorDelayed: string;
     colorConflict: string;
+    pageIndex: number;
+    totalPages: number;
+    totalBays: number;
+    rowsPerPage: number;
+    onPageChange: (p: number) => void;
 }
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -22,7 +27,11 @@ function shiftDay(d: Date, delta: number): Date {
     return n;
 }
 
-export function Toolbar({ displayDay, onDayChange, colorScheduled, colorInProgress, colorDelayed, colorConflict }: ToolbarProps): ReactElement {
+export function Toolbar({
+    displayDay, onDayChange,
+    colorScheduled, colorInProgress, colorDelayed, colorConflict,
+    pageIndex, totalPages, totalBays, rowsPerPage, onPageChange
+}: ToolbarProps): ReactElement {
     return (
         <div className="truck-scheduler__toolbar">
             <div className="truck-scheduler__date-nav">
@@ -35,19 +44,61 @@ export function Toolbar({ displayDay, onDayChange, colorScheduled, colorInProgre
                 </button>
             </div>
 
+            {totalPages > 1 && (
+                <Pagination
+                    pageIndex={pageIndex}
+                    totalPages={totalPages}
+                    totalBays={totalBays}
+                    rowsPerPage={rowsPerPage}
+                    onPageChange={onPageChange}
+                />
+            )}
+
             <div className="truck-scheduler__toolbar-right">
                 <Legend
-                scheduled={colorScheduled || "#1565C0"}
-                inProgress={colorInProgress || "#2E7D32"}
-                delayed={colorDelayed || "#D84315"}
-                conflict={colorConflict || "#4527A0"}
-            />
+                    scheduled={colorScheduled}
+                    inProgress={colorInProgress}
+                    delayed={colorDelayed}
+                    conflict={colorConflict}
+                />
             </div>
         </div>
     );
 }
 
-function Legend({ scheduled, inProgress, delayed, conflict }: { scheduled: string; inProgress: string; delayed: string; conflict: string }): ReactElement {
+function Pagination({ pageIndex, totalPages, totalBays, rowsPerPage, onPageChange }: {
+    pageIndex: number;
+    totalPages: number;
+    totalBays: number;
+    rowsPerPage: number;
+    onPageChange: (p: number) => void;
+}): ReactElement {
+    const startRow = pageIndex * rowsPerPage + 1;
+    const endRow = Math.min((pageIndex + 1) * rowsPerPage, totalBays);
+    return (
+        <div className="truck-scheduler__pagination">
+            <button
+                className="truck-scheduler__nav-btn"
+                onClick={() => onPageChange(pageIndex - 1)}
+                disabled={pageIndex === 0}
+                title="Previous bays"
+            >‹</button>
+            <span className="truck-scheduler__page-label">
+                Bays {startRow}–{endRow} / {totalBays}
+            </span>
+            <button
+                className="truck-scheduler__nav-btn"
+                onClick={() => onPageChange(pageIndex + 1)}
+                disabled={pageIndex >= totalPages - 1}
+                title="Next bays"
+            >›</button>
+        </div>
+    );
+}
+
+function Legend({ scheduled, inProgress, delayed, conflict }: {
+    scheduled: string; inProgress: string; delayed: string; conflict: string;
+}): ReactElement {
     return (
         <div className="truck-scheduler__legend">
             <LegendItem color={scheduled} label="Scheduled" />
