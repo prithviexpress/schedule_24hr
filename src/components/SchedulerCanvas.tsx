@@ -98,6 +98,7 @@ interface CanvasRow {
     y: number;
     h: number;
     bayId?: string;
+    subRow?: "plan" | "actual";
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -108,6 +109,7 @@ export interface SchedulerCanvasProps {
     bayStatusMap: Map<string, BayStatus>;
     displayDay: Date;
     resourceLabel: string;
+    hasPlanActual: boolean;
     rowHeight: number;
     showDwellMarkers: boolean;
     defaultDwellMinutes: number;
@@ -124,12 +126,19 @@ export interface SchedulerCanvasProps {
 
 // ─── Helper: compute row layout ───────────────────────────────────────────────
 
-function computeRows(bays: string[], rowH: number): CanvasRow[] {
+function computeRows(bays: string[], rowH: number, hasPlanActual: boolean): CanvasRow[] {
     const rows: CanvasRow[] = [];
     let y = 0;
     for (const bayId of bays) {
-        rows.push({ type: "bay", groupId: "__default__", label: bayId, bayId, y, h: rowH });
-        y += rowH;
+        if (hasPlanActual) {
+            rows.push({ type: "bay", groupId: "__default__", label: bayId, bayId, y, h: rowH, subRow: "plan" });
+            y += rowH;
+            rows.push({ type: "bay", groupId: "__default__", label: "↳ Actual", bayId, y, h: rowH, subRow: "actual" });
+            y += rowH;
+        } else {
+            rows.push({ type: "bay", groupId: "__default__", label: bayId, bayId, y, h: rowH });
+            y += rowH;
+        }
     }
     return rows;
 }
@@ -364,15 +373,26 @@ function drawBayRow(
     rangeEnd: number,
     gridW: number,
     showDwell: boolean,
-    bayInfo: BayStatus | undefined
+    bayInfo: BayStatus | undefined,
+    hasPlanActual: boolean
 ): void {
     const y = row.y;
     const h = row.h;
+    const isActual = row.subRow === "actual";
 
-    ctx.fillStyle = rowIdx % 2 === 0 ? C.rowEven : C.rowOdd;
+    // Grid area background
+    let gridBg = rowIdx % 2 === 0 ? C.rowEven : C.rowOdd;
+    ctx.fillStyle = gridBg;
     ctx.fillRect(BAY_LABEL_W, y, canvasW - BAY_LABEL_W - SCROLLBAR_W, h);
 
-    ctx.fillStyle = C.labelBg;
+    // Subtle amber tint overlay on actual rows' grid area
+    if (isActual) {
+        ctx.fillStyle = "rgba(255, 243, 205, 0.4)";
+        ctx.fillRect(BAY_LABEL_W, y, canvasW - BAY_LABEL_W - SCROLLBAR_W, h);
+    }
+
+    // Label area background
+    ctx.fillStyle = isActual ? "#FFF8E7" : C.labelBg;
     ctx.fillRect(0, y, BAY_LABEL_W, h);
 
     const pxPerMin = gridW / ((rangeEnd - rangeStart) * 60);
@@ -409,30 +429,44 @@ function drawBayRow(
     ctx.lineTo(BAY_LABEL_W - 0.5, y + h);
     ctx.stroke();
 
+    // Left stripe for plan/actual differentiation
+    if (hasPlanActual) {
+        ctx.fillStyle = isActual ? "#FB8C00" : "#1565C0";
+        ctx.fillRect(0, y, 4, h);
+    }
+
     // Bay label + truck icon
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, y, BAY_LABEL_W - 2, h);
     ctx.clip();
 
-    const statusColor = bayInfo ? bayStatusColor(bayInfo.color) : "";
-    const occupied = bayInfo?.occupied ?? null;
-    const hasTruck = bayInfo !== undefined;
-    // Color from bay data; if not set, use occupancy-aware defaults so icon
-    // is always meaningful without requiring bayColorAttr to be wired up
-    const truckColor = statusColor || (occupied === false ? "#90A4AE" : "#1565C0");
+    if (isActual) {
+        // Actual sub-row: just the label text in amber tone
+        ctx.fillStyle = "#6D3B00";
+        ctx.font = `italic 10px sans-serif`;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText("↳ Actual", hasPlanActual ? 8 : 4, y + h / 2);
+    } else {
+        // Plan row (or single-row mode)
+        const statusColor = bayInfo ? bayStatusColor(bayInfo.color) : "";
+        const occupied = bayInfo?.occupied ?? null;
+        const hasTruck = bayInfo !== undefined;
+        const truckColor = statusColor || (occupied === false ? "#90A4AE" : "#1565C0");
 
-    if (hasTruck) {
-        drawTruckIcon(ctx, 17, y + h / 2, occupied ?? false, truckColor);
+        if (hasTruck) {
+            drawTruckIcon(ctx, 17, y + h / 2, occupied ?? false, truckColor);
+        }
+
+        ctx.fillStyle = C.labelText;
+        ctx.font = "11px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const labelStartX = hasTruck ? 34 : (hasPlanActual ? 8 : 4);
+        const labelCx = (labelStartX + BAY_LABEL_W - 4) / 2;
+        ctx.fillText(row.label, labelCx, y + h / 2);
     }
-
-    ctx.fillStyle = C.labelText;
-    ctx.font = "11px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    const labelStartX = hasTruck ? 34 : 4;
-    const labelCx = (labelStartX + BAY_LABEL_W - 4) / 2;
-    ctx.fillText(row.label, labelCx, y + h / 2);
 
     ctx.restore();
 }
@@ -542,10 +576,11 @@ interface RenderParams {
     nowMin: number | null;
     palette: StatusColors;
     resourceLabel: string;
+    hasPlanActual: boolean;
 }
 
 function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
-    const { blocks, rows, bayRowMap, bayStatusMap, scrollY, canvasW, canvasH, showDwell, drag, rangeStart, rangeEnd, nowMin, palette, resourceLabel } = p;
+    const { blocks, rows, bayRowMap, bayStatusMap, scrollY, canvasW, canvasH, showDwell, drag, rangeStart, rangeEnd, nowMin, palette, resourceLabel, hasPlanActual } = p;
     const gridW = canvasW - BAY_LABEL_W - SCROLLBAR_W;
     const viewH = canvasH - HEADER_H;
 
@@ -576,7 +611,9 @@ function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
     for (const row of rows) {
         if (row.y + row.h <= viewTop) { bayRowIdx++; continue; }
         if (row.y >= viewBot) break;
-        drawBayRow(ctx, row, bayRowIdx, canvasW, rangeStart, rangeEnd, gridW, showDwell, bayStatusMap.get(row.bayId ?? ""));
+        // Only show bay status info (truck icon) on plan rows (or single-row mode)
+        const bayInfo = row.subRow !== "actual" ? bayStatusMap.get(row.bayId ?? "") : undefined;
+        drawBayRow(ctx, row, bayRowIdx, canvasW, rangeStart, rangeEnd, gridW, showDwell, bayInfo, hasPlanActual);
         bayRowIdx++;
     }
 
@@ -586,7 +623,9 @@ function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
     for (const block of blocks) {
         let startMin = block.startMin;
         let endMin = block.endMin;
-        let row = bayRowMap.get(block.bayId);
+        // Look up by compound key (bayId::subRow) when plan/actual mode is active
+        const rowKey = block.subRow ? `${block.bayId}::${block.subRow}` : block.bayId;
+        let row = bayRowMap.get(rowKey) ?? bayRowMap.get(block.bayId);
         if (!row) continue;
         if (drag && drag.block.item === block.item) {
             startMin = drag.currentStart;
@@ -615,6 +654,7 @@ export function SchedulerCanvas({
     bayStatusMap,
     displayDay,
     resourceLabel,
+    hasPlanActual,
     rowHeight,
     showDwellMarkers,
     defaultDwellMinutes,
@@ -640,8 +680,8 @@ export function SchedulerCanvas({
     const [hoverInfo, setHoverInfo] = useState<{ block: ScheduleBlock; clientX: number; clientY: number } | null>(null);
 
     const rows = useMemo(
-        () => computeRows(bays, rowHeight),
-        [bays, rowHeight]
+        () => computeRows(bays, rowHeight, hasPlanActual),
+        [bays, rowHeight, hasPlanActual]
     );
 
     const totalH = useMemo(() => {
@@ -653,7 +693,10 @@ export function SchedulerCanvas({
     const bayRowMap = useMemo(() => {
         const m = new Map<string, CanvasRow>();
         for (const r of rows) {
-            if (r.type === "bay" && r.bayId) m.set(r.bayId, r);
+            if (r.type === "bay" && r.bayId) {
+                const key = r.subRow ? `${r.bayId}::${r.subRow}` : r.bayId;
+                m.set(key, r);
+            }
         }
         return m;
     }, [rows]);
@@ -719,9 +762,10 @@ export function SchedulerCanvas({
             rangeEnd: timeRangeEnd,
             nowMin: computeNowMin(),
             palette,
-            resourceLabel: resourceLabel || "Resource"
+            resourceLabel: resourceLabel || "Resource",
+            hasPlanActual
         });
-    }, [blocks, rows, bayRowMap, bayStatusMap, canvasW, canvasH, rowHeight, showDwellMarkers, timeRangeStart, timeRangeEnd, colorScheduled, colorInProgress, colorDelayed, colorConflict, resourceLabel, computeNowMin]);
+    }, [blocks, rows, bayRowMap, bayStatusMap, canvasW, canvasH, rowHeight, showDwellMarkers, timeRangeStart, timeRangeEnd, colorScheduled, colorInProgress, colorDelayed, colorConflict, resourceLabel, hasPlanActual, computeNowMin]);
 
     useEffect(() => { drawCanvas(); }, [drawCanvas]);
 
@@ -763,6 +807,7 @@ export function SchedulerCanvas({
             for (let i = blocks.length - 1; i >= 0; i--) {
                 const b = blocks[i];
                 if (b.bayId !== row.bayId) continue;
+                if (row.subRow !== undefined && b.subRow !== row.subRow) continue;
 
                 const visStart = Math.max(b.startMin, rangeStartMin);
                 const visEnd = Math.min(b.endMin, rangeEndMin);
@@ -803,7 +848,7 @@ export function SchedulerCanvas({
             const pxPerMin = gridW / ((timeRangeEnd - timeRangeStart) * 60);
 
             if (hit) {
-                const rowIdx = rows.findIndex(r => r.type === "bay" && r.bayId === hit.block.bayId);
+                const rowIdx = rows.findIndex(r => r.type === "bay" && r.bayId === hit.block.bayId && r.subRow === hit.block.subRow);
                 dragRef.current = {
                     mode: hit.mode,
                     block: hit.block,
@@ -864,7 +909,7 @@ export function SchedulerCanvas({
                 drag.currentEnd = ns + dur;
 
                 const worldY = y - HEADER_H + scrollYRef.current;
-                const bayRows = rows.filter(r => r.type === "bay");
+                const bayRows = rows.filter(r => r.type === "bay" && r.subRow === drag.block.subRow);
                 let newRowIdx = drag.origRowIdx;
                 for (let i = 0; i < bayRows.length; i++) {
                     if (worldY >= bayRows[i].y && worldY < bayRows[i].y + bayRows[i].h) {

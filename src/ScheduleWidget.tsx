@@ -17,6 +17,7 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         colorAttr,
         tooltipAttr,
         tooltipAttr2,
+        planActualAttr,
         displayDate,
         bayData,
         bayIdForStatusAttr,
@@ -86,6 +87,10 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
             const color = (colorAttr?.get(item).value as string) ?? "";
             const tooltipText = tooltipAttr ? (tooltipAttr.get(item).displayValue ?? "") : "";
             const tooltipText2 = tooltipAttr2 ? (tooltipAttr2.get(item).displayValue ?? "") : "";
+            const planActualRaw = planActualAttr ? (planActualAttr.get(item).displayValue ?? "").toLowerCase().trim() : "";
+            const subRow: "plan" | "actual" | undefined = planActualAttr
+                ? (planActualRaw.includes("actual") ? "actual" : "plan")
+                : undefined;
 
             if (!startDate || !endDate || !bayId) return [];
 
@@ -96,9 +101,9 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
             const startMin = Math.max(0, (startDate.getTime() - dayStart) / 60000);
             const endMin = Math.min(1440, (endDate.getTime() - dayStart) / 60000);
 
-            return [{ item, truckId, bayId, groupId: "__default__", startMin, endMin, status, color, isConflict: false, tooltipText, tooltipText2 }];
+            return [{ item, truckId, bayId, groupId: "__default__", startMin, endMin, status, color, isConflict: false, tooltipText, tooltipText2, subRow }];
         });
-    }, [scheduleData.status, scheduleData.items, displayDay, truckIdAttr, bayIdAttr, startTimeAttr, endTimeAttr, statusAttr, colorAttr, tooltipAttr, tooltipAttr2]);
+    }, [scheduleData.status, scheduleData.items, displayDay, truckIdAttr, bayIdAttr, startTimeAttr, endTimeAttr, statusAttr, colorAttr, tooltipAttr, tooltipAttr2, planActualAttr]);
 
     // ── Conflict detection ────────────────────────────────────────────────────
     const blocks: ScheduleBlock[] = useMemo(() => detectConflicts(rawBlocks), [rawBlocks]);
@@ -262,6 +267,7 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
                     bayStatusMap={bayStatusMap}
                     displayDay={displayDay}
                     resourceLabel={resourceLabel || "Resource"}
+                    hasPlanActual={!!planActualAttr}
                     rowHeight={rowHeight ?? 30}
                     showDwellMarkers={showDwellMarkers ?? true}
                     defaultDwellMinutes={defaultDwellMinutes ?? 25}
@@ -291,9 +297,10 @@ function startOfDay(d: Date): number {
 function detectConflicts(blocks: ScheduleBlock[]): ScheduleBlock[] {
     const byBay = new Map<string, ScheduleBlock[]>();
     for (const b of blocks) {
-        const arr = byBay.get(b.bayId);
+        const key = b.subRow ? `${b.bayId}::${b.subRow}` : b.bayId;
+        const arr = byBay.get(key);
         if (arr) arr.push({ ...b });
-        else byBay.set(b.bayId, [{ ...b }]);
+        else byBay.set(key, [{ ...b }]);
     }
 
     const result: ScheduleBlock[] = [];

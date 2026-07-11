@@ -21,6 +21,7 @@ export interface ScheduleWidgetContainerProps {
     colorAttr?: ListAttributeValue<string>;
     tooltipAttr?: ListAttributeValue<string>;
     tooltipAttr2?: ListAttributeValue<string>;
+    planActualAttr?: ListAttributeValue<string>;
     displayDate?: EditableValue<Date | string>;
     bayData?: ListValue;
     bayIdForStatusAttr?: ListAttributeValue<string>;
@@ -65,6 +66,7 @@ export interface ScheduleWidgetPreviewProps {
     colorAttr: string;
     tooltipAttr: string;
     tooltipAttr2: string;
+    planActualAttr: string;
     displayDate: string;
     bayData: {} | { caption: string } | { type: string } | null;
     bayIdForStatusAttr: string;

@@ -12,6 +12,7 @@ export interface ScheduleBlock {
     isConflict: boolean;
     tooltipText?: string;
     tooltipText2?: string;
+    subRow?: "plan" | "actual";
 }
 
 export interface BayStatus {
