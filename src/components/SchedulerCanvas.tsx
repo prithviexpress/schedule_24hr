@@ -98,7 +98,6 @@ interface CanvasRow {
     y: number;
     h: number;
     bayId?: string;
-    subRow?: "plan" | "actual";
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -131,19 +130,10 @@ function computeRows(bays: string[], rowH: number, hasPlanActual: boolean, showA
     const rows: CanvasRow[] = [];
     let y = 0;
     for (const bayId of bays) {
-        if (hasPlanActual && showActualRows) {
-            rows.push({ type: "bay", groupId: "__default__", label: bayId, bayId, y, h: rowH, subRow: "plan" });
-            y += rowH;
-            rows.push({ type: "bay", groupId: "__default__", label: "↳ Actual", bayId, y, h: rowH, subRow: "actual" });
-            y += rowH;
-        } else if (hasPlanActual) {
-            // Plan-only view: single row, still tagged so compound key lookup works
-            rows.push({ type: "bay", groupId: "__default__", label: bayId, bayId, y, h: rowH, subRow: "plan" });
-            y += rowH;
-        } else {
-            rows.push({ type: "bay", groupId: "__default__", label: bayId, bayId, y, h: rowH });
-            y += rowH;
-        }
+        // When plan+actual is active each row is twice as tall so both bars fit inside
+        const h = hasPlanActual && showActualRows ? rowH * 2 : rowH;
+        rows.push({ type: "bay", groupId: "__default__", label: bayId, bayId, y, h });
+        y += h;
     }
     return rows;
 }
@@ -384,25 +374,32 @@ function drawBayRow(
 ): void {
     const y = row.y;
     const h = row.h;
-    const isActual = row.subRow === "actual";
+    const split = hasPlanActual && showActualRows;
+    // Half-height of one band when split; full row height otherwise
+    const bandH = split ? h / 2 : h;
 
-    // Grid area background
-    let gridBg = rowIdx % 2 === 0 ? C.rowEven : C.rowOdd;
-    ctx.fillStyle = gridBg;
+    // ── Grid area ──────────────────────────────────────────────────────────────
+
+    // Top band (plan) — even/odd alternating
+    ctx.fillStyle = rowIdx % 2 === 0 ? C.rowEven : C.rowOdd;
     ctx.fillRect(BAY_LABEL_W, y, canvasW - BAY_LABEL_W - SCROLLBAR_W, h);
 
-    // Subtle amber tint overlay on actual rows' grid area
-    if (isActual) {
-        ctx.fillStyle = "rgba(255, 243, 205, 0.4)";
-        ctx.fillRect(BAY_LABEL_W, y, canvasW - BAY_LABEL_W - SCROLLBAR_W, h);
+    // Bottom band (actual) — subtle amber tint layered on top
+    if (split) {
+        ctx.fillStyle = "rgba(255,243,205,0.4)";
+        ctx.fillRect(BAY_LABEL_W, y + bandH, canvasW - BAY_LABEL_W - SCROLLBAR_W, bandH);
     }
 
-    // Label area background
-    ctx.fillStyle = isActual ? "#FFF8E7" : C.labelBg;
-    ctx.fillRect(0, y, BAY_LABEL_W, h);
+    // ── Label area backgrounds ─────────────────────────────────────────────────
+    ctx.fillStyle = C.labelBg;
+    ctx.fillRect(0, y, BAY_LABEL_W, split ? bandH : h);
+    if (split) {
+        ctx.fillStyle = "#FFF8E7";
+        ctx.fillRect(0, y + bandH, BAY_LABEL_W, bandH);
+    }
 
+    // ── Dwell shading ──────────────────────────────────────────────────────────
     const pxPerMin = gridW / ((rangeEnd - rangeStart) * 60);
-
     if (showDwell) {
         ctx.fillStyle = C.dwellShade;
         for (let m = rangeStart * 60; m < rangeEnd * 60; m += 50) {
@@ -411,6 +408,7 @@ function drawBayRow(
         }
     }
 
+    // ── Hour grid lines (full row height) ─────────────────────────────────────
     ctx.strokeStyle = C.gridMajor;
     ctx.lineWidth = 0.5;
     for (let hh = rangeStart; hh <= rangeEnd; hh++) {
@@ -421,6 +419,9 @@ function drawBayRow(
         ctx.stroke();
     }
 
+    // ── Row borders ────────────────────────────────────────────────────────────
+
+    // Bottom border of full row
     ctx.strokeStyle = C.rowBorder;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -428,6 +429,17 @@ function drawBayRow(
     ctx.lineTo(canvasW - SCROLLBAR_W, y + h - 0.5);
     ctx.stroke();
 
+    // Divider between plan and actual bands
+    if (split) {
+        ctx.strokeStyle = C.rowBorder;
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(0, y + bandH - 0.5);
+        ctx.lineTo(canvasW - SCROLLBAR_W, y + bandH - 0.5);
+        ctx.stroke();
+    }
+
+    // Label / grid divider
     ctx.strokeStyle = C.labelBorder;
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -435,43 +447,56 @@ function drawBayRow(
     ctx.lineTo(BAY_LABEL_W - 0.5, y + h);
     ctx.stroke();
 
-    // Left stripe — only when both rows are visible (stripe has no meaning in plan-only view)
-    if (hasPlanActual && showActualRows) {
-        ctx.fillStyle = isActual ? "#FB8C00" : "#1565C0";
-        ctx.fillRect(0, y, 4, h);
+    // ── Left colour stripes ────────────────────────────────────────────────────
+    if (split) {
+        ctx.fillStyle = "#1565C0";
+        ctx.fillRect(0, y, 4, bandH);
+        ctx.fillStyle = "#FB8C00";
+        ctx.fillRect(0, y + bandH, 4, bandH);
     }
 
-    // Bay label + truck icon
+    // ── Label content ──────────────────────────────────────────────────────────
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, y, BAY_LABEL_W - 2, h);
     ctx.clip();
 
-    if (isActual) {
-        // Actual sub-row: just the label text in amber tone
+    // Plan label (top band or full row)
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, y, BAY_LABEL_W - 2, bandH);
+    ctx.clip();
+
+    const statusColor = bayInfo ? bayStatusColor(bayInfo.color) : "";
+    const occupied = bayInfo?.occupied ?? null;
+    const hasTruck = bayInfo !== undefined;
+    const truckColor = statusColor || (occupied === false ? "#90A4AE" : "#1565C0");
+
+    if (hasTruck) {
+        drawTruckIcon(ctx, 17, y + bandH / 2, occupied ?? false, truckColor);
+    }
+
+    ctx.fillStyle = C.labelText;
+    ctx.font = "11px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const labelStartX = hasTruck ? 34 : (split ? 8 : 4);
+    const labelCx = (labelStartX + BAY_LABEL_W - 4) / 2;
+    ctx.fillText(row.label, labelCx, y + bandH / 2);
+    ctx.restore();
+
+    // Actual label (bottom band — only when split)
+    if (split) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, y + bandH, BAY_LABEL_W - 2, bandH);
+        ctx.clip();
         ctx.fillStyle = "#6D3B00";
-        ctx.font = `italic 10px sans-serif`;
+        ctx.font = "italic 10px sans-serif";
         ctx.textAlign = "left";
         ctx.textBaseline = "middle";
-        ctx.fillText("↳ Actual", hasPlanActual ? 8 : 4, y + h / 2);
-    } else {
-        // Plan row (or single-row mode)
-        const statusColor = bayInfo ? bayStatusColor(bayInfo.color) : "";
-        const occupied = bayInfo?.occupied ?? null;
-        const hasTruck = bayInfo !== undefined;
-        const truckColor = statusColor || (occupied === false ? "#90A4AE" : "#1565C0");
-
-        if (hasTruck) {
-            drawTruckIcon(ctx, 17, y + h / 2, occupied ?? false, truckColor);
-        }
-
-        ctx.fillStyle = C.labelText;
-        ctx.font = "11px sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        const labelStartX = hasTruck ? 34 : (hasPlanActual && showActualRows ? 8 : 4);
-        const labelCx = (labelStartX + BAY_LABEL_W - 4) / 2;
-        ctx.fillText(row.label, labelCx, y + h / 2);
+        ctx.fillText("↳ Actual", 8, y + bandH + bandH / 2);
+        ctx.restore();
     }
 
     ctx.restore();
@@ -514,7 +539,9 @@ function drawBlock(
     rangeEnd: number,
     gridW: number,
     isDragging: boolean,
-    palette: StatusColors
+    palette: StatusColors,
+    hasPlanActual: boolean,
+    showActualRows: boolean
 ): void {
     const rangeStartMin = rangeStart * 60;
     const rangeEndMin = rangeEnd * 60;
@@ -525,8 +552,17 @@ function drawBlock(
     const bx = minToX(visStart, rangeStart, rangeEnd, gridW);
     const bxEnd = minToX(visEnd, rangeStart, rangeEnd, gridW);
     const bw = Math.max(2, bxEnd - bx);
-    const by = row.y + 2;
-    const bh = row.h - 4;
+
+    // In split-bar mode each band occupies half the row height
+    let by: number, bh: number;
+    if (hasPlanActual && showActualRows) {
+        const bandH = row.h / 2;
+        by = block.subRow === "actual" ? row.y + bandH + 2 : row.y + 2;
+        bh = bandH - 4;
+    } else {
+        by = row.y + 2;
+        bh = row.h - 4;
+    }
     if (bw < 1 || bh < 1) return;
 
     const { fill, text } = blockColors(block, palette);
@@ -618,8 +654,7 @@ function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
     for (const row of rows) {
         if (row.y + row.h <= viewTop) { bayRowIdx++; continue; }
         if (row.y >= viewBot) break;
-        // Only show bay status info (truck icon) on plan rows (or single-row mode)
-        const bayInfo = row.subRow !== "actual" ? bayStatusMap.get(row.bayId ?? "") : undefined;
+        const bayInfo = bayStatusMap.get(row.bayId ?? "");
         drawBayRow(ctx, row, bayRowIdx, canvasW, rangeStart, rangeEnd, gridW, showDwell, bayInfo, hasPlanActual, showActualRows);
         bayRowIdx++;
     }
@@ -628,11 +663,13 @@ function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
     const rangeStartMin = rangeStart * 60;
     const rangeEndMin = rangeEnd * 60;
     for (const block of blocks) {
+        // When not showing actual, skip actual blocks entirely
+        if (!showActualRows && block.subRow === "actual") continue;
+
         let startMin = block.startMin;
         let endMin = block.endMin;
-        // Look up by compound key (bayId::subRow) when plan/actual mode is active
-        const rowKey = block.subRow ? `${block.bayId}::${block.subRow}` : block.bayId;
-        let row = bayRowMap.get(rowKey) ?? bayRowMap.get(block.bayId);
+        // Each bay is now a single row — look up by bayId directly
+        let row = bayRowMap.get(block.bayId);
         if (!row) continue;
         if (drag && drag.block.item === block.item) {
             startMin = drag.currentStart;
@@ -642,7 +679,7 @@ function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
         }
         if (endMin <= rangeStartMin || startMin >= rangeEndMin) continue;
         if (row.y + row.h <= viewTop || row.y >= viewBot) continue;
-        drawBlock(ctx, block, row, startMin, endMin, rangeStart, rangeEnd, gridW, drag?.block.item === block.item, palette);
+        drawBlock(ctx, block, row, startMin, endMin, rangeStart, rangeEnd, gridW, drag?.block.item === block.item, palette, hasPlanActual, showActualRows);
     }
 
     // Current-time dashed line in content area (drawn on top of blocks)
@@ -701,10 +738,7 @@ export function SchedulerCanvas({
     const bayRowMap = useMemo(() => {
         const m = new Map<string, CanvasRow>();
         for (const r of rows) {
-            if (r.type === "bay" && r.bayId) {
-                const key = r.subRow ? `${r.bayId}::${r.subRow}` : r.bayId;
-                m.set(key, r);
-            }
+            if (r.type === "bay" && r.bayId) m.set(r.bayId, r);
         }
         return m;
     }, [rows]);
@@ -816,7 +850,7 @@ export function SchedulerCanvas({
             for (let i = blocks.length - 1; i >= 0; i--) {
                 const b = blocks[i];
                 if (b.bayId !== row.bayId) continue;
-                if (row.subRow !== undefined && b.subRow !== row.subRow) continue;
+                if (!showActualRows && b.subRow === "actual") continue;
 
                 const visStart = Math.max(b.startMin, rangeStartMin);
                 const visEnd = Math.min(b.endMin, rangeEndMin);
@@ -825,8 +859,17 @@ export function SchedulerCanvas({
                 const bx = minToX(visStart, timeRangeStart, timeRangeEnd, gridW);
                 const bxEnd = minToX(visEnd, timeRangeStart, timeRangeEnd, gridW);
                 const bw = Math.max(2, bxEnd - bx);
-                const by = row.y - scrollYRef.current + HEADER_H + 2;
-                const bh = row.h - 4;
+
+                // Compute the click-target rectangle for this block's band
+                let by: number, bh: number;
+                if (hasPlanActual && showActualRows) {
+                    const bandH = row.h / 2;
+                    by = row.y - scrollYRef.current + HEADER_H + (b.subRow === "actual" ? bandH : 0) + 2;
+                    bh = bandH - 4;
+                } else {
+                    by = row.y - scrollYRef.current + HEADER_H + 2;
+                    bh = row.h - 4;
+                }
 
                 if (canvasX >= bx && canvasX <= bx + bw && canvasY >= by && canvasY <= by + bh) {
                     if (canvasX <= bx + RESIZE_HIT) return { block: b, mode: "resize-left" };
@@ -836,7 +879,7 @@ export function SchedulerCanvas({
             }
             return null;
         },
-        [blocks, canvasW, timeRangeStart, timeRangeEnd, hitTestRow]
+        [blocks, canvasW, timeRangeStart, timeRangeEnd, hasPlanActual, showActualRows, hitTestRow]
     );
 
     const canvasCoords = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -857,7 +900,7 @@ export function SchedulerCanvas({
             const pxPerMin = gridW / ((timeRangeEnd - timeRangeStart) * 60);
 
             if (hit) {
-                const rowIdx = rows.findIndex(r => r.type === "bay" && r.bayId === hit.block.bayId && r.subRow === hit.block.subRow);
+                const rowIdx = rows.findIndex(r => r.type === "bay" && r.bayId === hit.block.bayId);
                 dragRef.current = {
                     mode: hit.mode,
                     block: hit.block,
@@ -918,7 +961,7 @@ export function SchedulerCanvas({
                 drag.currentEnd = ns + dur;
 
                 const worldY = y - HEADER_H + scrollYRef.current;
-                const bayRows = rows.filter(r => r.type === "bay" && r.subRow === drag.block.subRow);
+                const bayRows = rows.filter(r => r.type === "bay");
                 let newRowIdx = drag.origRowIdx;
                 for (let i = 0; i < bayRows.length; i++) {
                     if (worldY >= bayRows[i].y && worldY < bayRows[i].y + bayRows[i].h) {
