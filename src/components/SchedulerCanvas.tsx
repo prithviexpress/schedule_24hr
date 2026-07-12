@@ -110,6 +110,7 @@ export interface SchedulerCanvasProps {
     displayDay: Date;
     resourceLabel: string;
     hasPlanActual: boolean;
+    showActualRows: boolean;
     rowHeight: number;
     showDwellMarkers: boolean;
     defaultDwellMinutes: number;
@@ -126,14 +127,18 @@ export interface SchedulerCanvasProps {
 
 // ─── Helper: compute row layout ───────────────────────────────────────────────
 
-function computeRows(bays: string[], rowH: number, hasPlanActual: boolean): CanvasRow[] {
+function computeRows(bays: string[], rowH: number, hasPlanActual: boolean, showActualRows: boolean): CanvasRow[] {
     const rows: CanvasRow[] = [];
     let y = 0;
     for (const bayId of bays) {
-        if (hasPlanActual) {
+        if (hasPlanActual && showActualRows) {
             rows.push({ type: "bay", groupId: "__default__", label: bayId, bayId, y, h: rowH, subRow: "plan" });
             y += rowH;
             rows.push({ type: "bay", groupId: "__default__", label: "↳ Actual", bayId, y, h: rowH, subRow: "actual" });
+            y += rowH;
+        } else if (hasPlanActual) {
+            // Plan-only view: single row, still tagged so compound key lookup works
+            rows.push({ type: "bay", groupId: "__default__", label: bayId, bayId, y, h: rowH, subRow: "plan" });
             y += rowH;
         } else {
             rows.push({ type: "bay", groupId: "__default__", label: bayId, bayId, y, h: rowH });
@@ -374,7 +379,8 @@ function drawBayRow(
     gridW: number,
     showDwell: boolean,
     bayInfo: BayStatus | undefined,
-    hasPlanActual: boolean
+    hasPlanActual: boolean,
+    showActualRows: boolean
 ): void {
     const y = row.y;
     const h = row.h;
@@ -429,8 +435,8 @@ function drawBayRow(
     ctx.lineTo(BAY_LABEL_W - 0.5, y + h);
     ctx.stroke();
 
-    // Left stripe for plan/actual differentiation
-    if (hasPlanActual) {
+    // Left stripe — only when both rows are visible (stripe has no meaning in plan-only view)
+    if (hasPlanActual && showActualRows) {
         ctx.fillStyle = isActual ? "#FB8C00" : "#1565C0";
         ctx.fillRect(0, y, 4, h);
     }
@@ -463,7 +469,7 @@ function drawBayRow(
         ctx.font = "11px sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        const labelStartX = hasTruck ? 34 : (hasPlanActual ? 8 : 4);
+        const labelStartX = hasTruck ? 34 : (hasPlanActual && showActualRows ? 8 : 4);
         const labelCx = (labelStartX + BAY_LABEL_W - 4) / 2;
         ctx.fillText(row.label, labelCx, y + h / 2);
     }
@@ -577,10 +583,11 @@ interface RenderParams {
     palette: StatusColors;
     resourceLabel: string;
     hasPlanActual: boolean;
+    showActualRows: boolean;
 }
 
 function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
-    const { blocks, rows, bayRowMap, bayStatusMap, scrollY, canvasW, canvasH, showDwell, drag, rangeStart, rangeEnd, nowMin, palette, resourceLabel, hasPlanActual } = p;
+    const { blocks, rows, bayRowMap, bayStatusMap, scrollY, canvasW, canvasH, showDwell, drag, rangeStart, rangeEnd, nowMin, palette, resourceLabel, hasPlanActual, showActualRows } = p;
     const gridW = canvasW - BAY_LABEL_W - SCROLLBAR_W;
     const viewH = canvasH - HEADER_H;
 
@@ -613,7 +620,7 @@ function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
         if (row.y >= viewBot) break;
         // Only show bay status info (truck icon) on plan rows (or single-row mode)
         const bayInfo = row.subRow !== "actual" ? bayStatusMap.get(row.bayId ?? "") : undefined;
-        drawBayRow(ctx, row, bayRowIdx, canvasW, rangeStart, rangeEnd, gridW, showDwell, bayInfo, hasPlanActual);
+        drawBayRow(ctx, row, bayRowIdx, canvasW, rangeStart, rangeEnd, gridW, showDwell, bayInfo, hasPlanActual, showActualRows);
         bayRowIdx++;
     }
 
@@ -655,6 +662,7 @@ export function SchedulerCanvas({
     displayDay,
     resourceLabel,
     hasPlanActual,
+    showActualRows,
     rowHeight,
     showDwellMarkers,
     defaultDwellMinutes,
@@ -680,8 +688,8 @@ export function SchedulerCanvas({
     const [hoverInfo, setHoverInfo] = useState<{ block: ScheduleBlock; clientX: number; clientY: number } | null>(null);
 
     const rows = useMemo(
-        () => computeRows(bays, rowHeight, hasPlanActual),
-        [bays, rowHeight, hasPlanActual]
+        () => computeRows(bays, rowHeight, hasPlanActual, showActualRows),
+        [bays, rowHeight, hasPlanActual, showActualRows]
     );
 
     const totalH = useMemo(() => {
@@ -763,9 +771,10 @@ export function SchedulerCanvas({
             nowMin: computeNowMin(),
             palette,
             resourceLabel: resourceLabel || "Resource",
-            hasPlanActual
+            hasPlanActual,
+            showActualRows
         });
-    }, [blocks, rows, bayRowMap, bayStatusMap, canvasW, canvasH, rowHeight, showDwellMarkers, timeRangeStart, timeRangeEnd, colorScheduled, colorInProgress, colorDelayed, colorConflict, resourceLabel, hasPlanActual, computeNowMin]);
+    }, [blocks, rows, bayRowMap, bayStatusMap, canvasW, canvasH, rowHeight, showDwellMarkers, timeRangeStart, timeRangeEnd, colorScheduled, colorInProgress, colorDelayed, colorConflict, resourceLabel, hasPlanActual, showActualRows, computeNowMin]);
 
     useEffect(() => { drawCanvas(); }, [drawCanvas]);
 

@@ -30,6 +30,8 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         rowHeight,
         resourceLabel,
         rowsPerPage,
+        showActualRows,
+        showActualRowsVar,
         showDwellMarkers,
         defaultDwellMinutes,
         timeRangeStart,
@@ -238,6 +240,11 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
     const rangeStart = resolveHour(timeRangeStartVar, timeRangeStart, 0, 23);
     const rangeEnd   = resolveHour(timeRangeEndVar,   timeRangeEnd,   rangeStart + 1, 24);
 
+    // showActualRowsVar (boolean attribute) wins over the static showActualRows setting
+    const effectiveShowActual = showActualRowsVar?.value != null
+        ? Boolean(showActualRowsVar.value)
+        : (showActualRows ?? true);
+
     return (
         <div id={name} className={`truck-scheduler${cssClass ? ` ${cssClass}` : ""}`} style={style}>
             <Toolbar
@@ -268,6 +275,7 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
                     displayDay={displayDay}
                     resourceLabel={resourceLabel || "Resource"}
                     hasPlanActual={!!planActualAttr}
+                    showActualRows={effectiveShowActual}
                     rowHeight={rowHeight ?? 30}
                     showDwellMarkers={showDwellMarkers ?? true}
                     defaultDwellMinutes={defaultDwellMinutes ?? 25}

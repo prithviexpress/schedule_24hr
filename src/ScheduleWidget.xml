@@ -233,6 +233,19 @@
                 <description>Duration used for new truck blocks created by clicking an empty slot. Default 25 minutes.</description>
             </property>
 
+            <property key="showActualRows" type="boolean" defaultValue="true" required="true">
+                <caption>Show Actual Rows</caption>
+                <description>When enabled and Plan/Actual attribute is configured, each resource shows a Plan row and an Actual row side by side. Disable to show only Plan rows. Can be overridden at runtime via Show Actual Rows Variable.</description>
+            </property>
+
+            <property key="showActualRowsVar" type="attribute" required="false">
+                <caption>Show Actual Rows (variable)</caption>
+                <description>Boolean page variable that dynamically overrides the Show Actual Rows setting — wire a toggle button to switch between Plan-only and Plan+Actual views without republishing.</description>
+                <attributeTypes>
+                    <attributeType name="Boolean" />
+                </attributeTypes>
+            </property>
+
             <property key="colorScheduled" type="string" defaultValue="#1565C0" required="false">
                 <caption>Color: Scheduled</caption>
                 <description>Block fill color for "Scheduled" status. Accepts any CSS color value, e.g. #1565C0.</description>

@@ -40,6 +40,8 @@ export interface ScheduleWidgetContainerProps {
     timeRangeEndVar?: EditableValue<Big>;
     showDwellMarkers: boolean;
     defaultDwellMinutes: number;
+    showActualRows: boolean;
+    showActualRowsVar?: EditableValue<boolean>;
     colorScheduled: string;
     colorInProgress: string;
     colorDelayed: string;
@@ -85,6 +87,8 @@ export interface ScheduleWidgetPreviewProps {
     timeRangeEndVar: string;
     showDwellMarkers: boolean;
     defaultDwellMinutes: number | null;
+    showActualRows: boolean;
+    showActualRowsVar: string;
     colorScheduled: string;
     colorInProgress: string;
     colorDelayed: string;
