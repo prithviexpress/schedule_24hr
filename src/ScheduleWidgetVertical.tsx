@@ -1,0 +1,351 @@
+import React, { ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ObjectItem } from "mendix";
+import { ScheduleWidgetVerticalContainerProps } from "../typings/ScheduleWidgetVerticalProps";
+import { VerticalSchedulerCanvas } from "./components/VerticalSchedulerCanvas";
+import { Toolbar } from "./components/Toolbar";
+import { ScheduleBlock, BayStatus, PendingEdit, NewSlot } from "./components/types";
+import "./ui/ScheduleWidget.css";
+
+export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerProps): ReactElement {
+    const {
+        scheduleData,
+        truckIdAttr,
+        bayIdAttr,
+        startTimeAttr,
+        endTimeAttr,
+        statusAttr,
+        colorAttr,
+        tooltipAttr,
+        tooltipAttr2,
+        planActualAttr,
+        displayDate,
+        bayData,
+        bayIdForStatusAttr,
+        bayColorAttr,
+        bayOccupancyAttr,
+        baySortAttr,
+        onTruckClick,
+        onScheduleChange,
+        onEmptySlotClick,
+        rowHeight,
+        resourceLabel,
+        rowsPerPage,
+        showActualRows,
+        showActualRowsVar,
+        showDwellMarkers,
+        defaultDwellMinutes,
+        timeRangeStart,
+        timeRangeEnd,
+        timeRangeStartVar,
+        timeRangeEndVar,
+        colorScheduled,
+        colorInProgress,
+        colorDelayed,
+        colorConflict,
+        name,
+        class: cssClass,
+        style
+    } = props;
+
+    const [localDisplayDay, setLocalDisplayDay] = useState<Date>(() => new Date());
+
+    // Auto-reload every 60 s
+    const bayDataRef = useRef(bayData);
+    const scheduleDataRef = useRef(scheduleData);
+    useEffect(() => { bayDataRef.current = bayData; });
+    useEffect(() => { scheduleDataRef.current = scheduleData; });
+    useEffect(() => {
+        const id = setInterval(() => {
+            bayDataRef.current?.reload();
+            scheduleDataRef.current?.reload();
+        }, 60000);
+        return () => clearInterval(id);
+    }, []);
+
+    // Pagination (bays per page, not rows per page — same prop key reused)
+    const [pageIndex, setPageIndex] = useState(0);
+
+    // Resolve display day
+    const displayDay: Date = useMemo(() => {
+        if (displayDate?.value) {
+            const v = displayDate.value as Date | string;
+            return typeof v === "string" ? new Date(v) : v;
+        }
+        return localDisplayDay;
+    }, [displayDate?.value, localDisplayDay]);
+
+    // ── Transform Mendix list → ScheduleBlock[] ───────────────────────────────
+    const rawBlocks: ScheduleBlock[] = useMemo(() => {
+        if (scheduleData.status !== "available" || !scheduleData.items) return [];
+        const dayStart = startOfDay(displayDay);
+        return scheduleData.items.flatMap((item: ObjectItem) => {
+            const truckId = (truckIdAttr.get(item).value as string) ?? "";
+            const bayId = (bayIdAttr.get(item).value as string) ?? "";
+            const startDate = startTimeAttr.get(item).value as Date | undefined;
+            const endDate = endTimeAttr.get(item).value as Date | undefined;
+            const status = (statusAttr?.get(item).value as string) ?? "Scheduled";
+            const color = (colorAttr?.get(item).value as string) ?? "";
+            const tooltipText = tooltipAttr ? (tooltipAttr.get(item).displayValue ?? "") : "";
+            const tooltipText2 = tooltipAttr2 ? (tooltipAttr2.get(item).displayValue ?? "") : "";
+            const planActualRaw = planActualAttr
+                ? (planActualAttr.get(item).displayValue ?? "").toLowerCase().trim()
+                : "";
+            const subRow: "plan" | "actual" | undefined = planActualAttr
+                ? (planActualRaw.includes("actual") ? "actual" : "plan")
+                : undefined;
+
+            if (!startDate || !endDate || !bayId) return [];
+
+            const dayEnd = dayStart + 24 * 60 * 60 * 1000;
+            if (endDate.getTime() <= dayStart || startDate.getTime() >= dayEnd) return [];
+
+            const startMin = Math.max(0, (startDate.getTime() - dayStart) / 60000);
+            const endMin = Math.min(1440, (endDate.getTime() - dayStart) / 60000);
+
+            return [{ item, truckId, bayId, groupId: "__default__", startMin, endMin, status, color, isConflict: false, tooltipText, tooltipText2, subRow }];
+        });
+    }, [scheduleData.status, scheduleData.items, displayDay, truckIdAttr, bayIdAttr, startTimeAttr, endTimeAttr, statusAttr, colorAttr, tooltipAttr, tooltipAttr2, planActualAttr]);
+
+    // Conflict detection (same as horizontal widget)
+    const blocks: ScheduleBlock[] = useMemo(() => detectConflicts(rawBlocks), [rawBlocks]);
+
+    // Bay status map
+    const bayStatusMap = useMemo(() => {
+        const m = new Map<string, BayStatus>();
+        if (bayData?.status !== "available" || !bayData.items || !bayIdForStatusAttr) return m;
+        for (const item of bayData.items) {
+            const bayId = bayIdForStatusAttr.get(item).displayValue ?? "";
+            if (!bayId) continue;
+            const color = bayColorAttr ? (bayColorAttr.get(item).displayValue ?? "") : "";
+            const occStr = bayOccupancyAttr
+                ? (bayOccupancyAttr.get(item).displayValue ?? "").toLowerCase().trim()
+                : "";
+            const occupied: boolean | null = occStr
+                ? (occStr === "yes" || occStr === "true" || occStr === "1" || occStr === "occupied" || occStr === "busy" || occStr === "docked"
+                    ? true : false)
+                : null;
+            m.set(bayId, { color, occupied });
+        }
+        return m;
+    }, [bayData?.status, bayData?.items, bayIdForStatusAttr, bayColorAttr, bayOccupancyAttr]);
+
+    // Bay sort map
+    const baySortMap = useMemo(() => {
+        const m = new Map<string, number>();
+        if (bayData?.status !== "available" || !bayData.items || !bayIdForStatusAttr || !baySortAttr) return m;
+        for (const item of bayData.items) {
+            const bayId = bayIdForStatusAttr.get(item).displayValue ?? "";
+            if (!bayId) continue;
+            const v = baySortAttr.get(item).value;
+            if (v != null) m.set(bayId, Number(v));
+        }
+        return m;
+    }, [bayData?.status, bayData?.items, bayIdForStatusAttr, baySortAttr]);
+
+    // Sorted flat bay list
+    const bays = useMemo(() => {
+        const set = new Set<string>();
+        for (const b of blocks) set.add(b.bayId);
+        return [...set].sort((a, b) => {
+            if (baySortMap.size > 0) {
+                const sa = baySortMap.get(a);
+                const sb = baySortMap.get(b);
+                if (sa != null && sb != null) return sa - sb;
+                if (sa != null) return -1;
+                if (sb != null) return 1;
+            }
+            return naturalCompare(a, b);
+        });
+    }, [blocks, baySortMap]);
+
+    // Reset page on bay list change
+    const prevBaysRef = useRef(bays);
+    useEffect(() => {
+        if (prevBaysRef.current !== bays) {
+            prevBaysRef.current = bays;
+            setPageIndex(0);
+        }
+    }, [bays]);
+
+    // Pagination
+    const effectiveBaysPerPage = rowsPerPage > 0 ? rowsPerPage : bays.length || 1;
+    const totalPages = Math.max(1, Math.ceil(bays.length / effectiveBaysPerPage));
+    const pagedBays = bays.slice(pageIndex * effectiveBaysPerPage, (pageIndex + 1) * effectiveBaysPerPage);
+
+    // Day navigation
+    const handleDayChange = useCallback(
+        (newDay: Date) => {
+            if (displayDate && !displayDate.readOnly) {
+                (displayDate as any).setValue(newDay);
+            } else {
+                setLocalDisplayDay(newDay);
+            }
+        },
+        [displayDate]
+    );
+
+    // Truck click
+    const handleTruckClick = useCallback(
+        (block: ScheduleBlock) => {
+            const action = onTruckClick?.get(block.item);
+            if (action?.canExecute) action.execute();
+        },
+        [onTruckClick]
+    );
+
+    // Schedule change (drag / resize) — includes newBayId when bay changed
+    const handleScheduleChange = useCallback(
+        (block: ScheduleBlock, newStartMin: number, newEndMin: number) => {
+            const dayStart = startOfDay(displayDay);
+            const newStart = new Date(dayStart + newStartMin * 60000);
+            const newEnd = new Date(dayStart + newEndMin * 60000);
+
+            window.__TruckSchedulerPendingEdit = {
+                newStartISO: newStart.toISOString(),
+                newEndISO: newEnd.toISOString(),
+                newBayId: block.bayId
+            } as PendingEdit;
+
+            const action = onScheduleChange?.get(block.item);
+            if (action?.canExecute) action.execute();
+        },
+        [onScheduleChange, displayDay]
+    );
+
+    // Empty slot click
+    const handleEmptySlotClick = useCallback(
+        (bayId: string, startMin: number, endMin: number, _defaultDwell: number) => {
+            const dayStart = startOfDay(displayDay);
+            window.__TruckSchedulerNewSlot = {
+                bayId,
+                startISO: new Date(dayStart + startMin * 60000).toISOString(),
+                endISO: new Date(dayStart + endMin * 60000).toISOString()
+            } as NewSlot;
+            if (onEmptySlotClick?.canExecute) onEmptySlotClick.execute();
+        },
+        [onEmptySlotClick, displayDay]
+    );
+
+    // Time range resolution
+    const resolveHour = (varProp: any, staticVal: number, min: number, max: number) => {
+        if (varProp?.value != null) {
+            const v = Number(varProp.value);
+            if (!isNaN(v)) return Math.max(min, Math.min(max, v));
+        }
+        return typeof staticVal === "number" ? Math.max(min, Math.min(max, staticVal)) : min;
+    };
+    const rangeStart = resolveHour(timeRangeStartVar, timeRangeStart, 0, 23);
+    const rangeEnd   = resolveHour(timeRangeEndVar, timeRangeEnd, rangeStart + 1, 24);
+
+    // showActualRowsVar wins over static
+    const effectiveShowActual = showActualRowsVar?.value != null
+        ? Boolean(showActualRowsVar.value)
+        : (showActualRows ?? true);
+
+    const isLoading = scheduleData.status === "loading";
+    const isEmpty = scheduleData.status === "available" && bays.length === 0;
+
+    return (
+        <div id={name} className={`truck-scheduler truck-scheduler--vertical${cssClass ? ` ${cssClass}` : ""}`} style={style}>
+            <Toolbar
+                displayDay={displayDay}
+                onDayChange={handleDayChange}
+                colorScheduled={colorScheduled || "#1565C0"}
+                colorInProgress={colorInProgress || "#2E7D32"}
+                colorDelayed={colorDelayed || "#D84315"}
+                colorConflict={colorConflict || "#4527A0"}
+                pageIndex={pageIndex}
+                totalPages={totalPages}
+                totalBays={bays.length}
+                rowsPerPage={effectiveBaysPerPage}
+                onPageChange={setPageIndex}
+            />
+
+            <div className="truck-scheduler__canvas-wrapper">
+                {isLoading && <div className="truck-scheduler__loading">Loading schedule…</div>}
+                {isEmpty && !isLoading && (
+                    <div className="truck-scheduler__empty">
+                        No schedule entries for this day. Click a bay slot to add a truck.
+                    </div>
+                )}
+                <VerticalSchedulerCanvas
+                    blocks={blocks}
+                    bays={pagedBays}
+                    bayStatusMap={bayStatusMap}
+                    displayDay={displayDay}
+                    resourceLabel={resourceLabel || "Time"}
+                    hasPlanActual={!!planActualAttr}
+                    showActualRows={effectiveShowActual}
+                    rowHeight={rowHeight ?? 20}
+                    showDwellMarkers={showDwellMarkers ?? true}
+                    defaultDwellMinutes={defaultDwellMinutes ?? 25}
+                    timeRangeStart={rangeStart}
+                    timeRangeEnd={rangeEnd}
+                    colorScheduled={colorScheduled || "#1565C0"}
+                    colorInProgress={colorInProgress || "#2E7D32"}
+                    colorDelayed={colorDelayed || "#D84315"}
+                    colorConflict={colorConflict || "#4527A0"}
+                    onTruckClick={handleTruckClick}
+                    onScheduleChange={handleScheduleChange}
+                    onEmptySlotClick={handleEmptySlotClick}
+                />
+            </div>
+        </div>
+    );
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function startOfDay(d: Date): number {
+    const c = new Date(d);
+    c.setHours(0, 0, 0, 0);
+    return c.getTime();
+}
+
+function detectConflicts(blocks: ScheduleBlock[]): ScheduleBlock[] {
+    const byBay = new Map<string, ScheduleBlock[]>();
+    for (const b of blocks) {
+        const key = b.subRow ? `${b.bayId}::${b.subRow}` : b.bayId;
+        const arr = byBay.get(key);
+        if (arr) arr.push({ ...b });
+        else byBay.set(key, [{ ...b }]);
+    }
+
+    const result: ScheduleBlock[] = [];
+    byBay.forEach(bayBlocks => {
+        bayBlocks.sort((a, b) => a.startMin - b.startMin);
+        let maxEnd = -Infinity;
+        let prevIdx = -1;
+        for (let i = 0; i < bayBlocks.length; i++) {
+            const b = bayBlocks[i];
+            if (b.startMin < maxEnd) {
+                bayBlocks[i] = { ...b, isConflict: true };
+                if (prevIdx >= 0) bayBlocks[prevIdx] = { ...bayBlocks[prevIdx], isConflict: true };
+            }
+            if (b.endMin > maxEnd) {
+                maxEnd = b.endMin;
+                prevIdx = i;
+            }
+        }
+        result.push(...bayBlocks);
+    });
+    return result;
+}
+
+function naturalCompare(a: string, b: string): number {
+    const re = /(\d+)/g;
+    const pa = a.split(re);
+    const pb = b.split(re);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        const sa = pa[i] ?? "";
+        const sb = pb[i] ?? "";
+        const na = Number(sa);
+        const nb = Number(sb);
+        if (!isNaN(na) && !isNaN(nb)) {
+            if (na !== nb) return na - nb;
+        } else {
+            if (sa !== sb) return sa < sb ? -1 : 1;
+        }
+    }
+    return 0;
+}

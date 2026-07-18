@@ -29,6 +29,7 @@ export interface BayGroup {
 export interface PendingEdit {
     newStartISO: string;
     newEndISO: string;
+    newBayId?: string;   // set by vertical widget when a block is dragged to a different bay
 }
 
 export interface NewSlot {

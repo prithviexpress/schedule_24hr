@@ -1,0 +1,272 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<widget id="com.prithvi.ScheduleWidgetVertical"
+        pluginWidget="true"
+        needsEntityContext="false"
+        supportedPlatform="Web"
+        offlineCapable="false"
+        xmlns="http://www.mendix.com/widget/1.0/"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.mendix.com/widget/1.0/ ../node_modules/@mendix/pluggable-widgets-tools/dist/xsd/widget.xsd">
+
+    <name>Truck Scheduler Vertical</name>
+    <description>Vertical-axis truck scheduling grid. Bays appear as columns across the top; time runs downward in 5-minute increments. Supports drag/move/resize, Plan vs Actual split bands, and conflict highlighting.</description>
+    <studioProCategory>Add-ons</studioProCategory>
+
+    <properties>
+
+        <!-- ═══════════ DATA ═══════════ -->
+        <propertyGroup caption="Data">
+
+            <property key="scheduleData" type="datasource" isList="true" required="true">
+                <caption>Schedule Data</caption>
+                <description>List of schedule objects — one per truck-bay assignment.</description>
+            </property>
+
+            <property key="truckIdAttr" type="attribute" dataSource="scheduleData" required="true">
+                <caption>Truck ID</caption>
+                <description>String attribute identifying the truck (e.g. "TRK-0042").</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                </attributeTypes>
+            </property>
+
+            <property key="bayIdAttr" type="attribute" dataSource="scheduleData" required="true">
+                <caption>Bay ID</caption>
+                <description>String attribute identifying the loading bay (e.g. "A1", "North-12"). Bay columns are derived dynamically.</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                    <attributeType name="Enum" />
+                </attributeTypes>
+            </property>
+
+            <property key="startTimeAttr" type="attribute" dataSource="scheduleData" required="true">
+                <caption>Start Time</caption>
+                <description>DateTime attribute for when the truck arrives at the bay.</description>
+                <attributeTypes>
+                    <attributeType name="DateTime" />
+                </attributeTypes>
+            </property>
+
+            <property key="endTimeAttr" type="attribute" dataSource="scheduleData" required="true">
+                <caption>End Time</caption>
+                <description>DateTime attribute for when the truck departs the bay.</description>
+                <attributeTypes>
+                    <attributeType name="DateTime" />
+                </attributeTypes>
+            </property>
+
+            <property key="statusAttr" type="attribute" dataSource="scheduleData" required="false">
+                <caption>Status</caption>
+                <description>Optional status attribute — Scheduled / InProgress / Completed / Conflict.</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                    <attributeType name="Enum" />
+                </attributeTypes>
+            </property>
+
+            <property key="colorAttr" type="attribute" dataSource="scheduleData" required="false">
+                <caption>Color Override</caption>
+                <description>Optional CSS hex color per truck block (e.g. "#E57373"). Overrides status-based coloring.</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                </attributeTypes>
+            </property>
+
+            <property key="tooltipAttr" type="attribute" dataSource="scheduleData" required="false">
+                <caption>Tooltip Line 1</caption>
+                <description>First custom line shown inside the block (and in the hover tooltip).</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                </attributeTypes>
+            </property>
+
+            <property key="tooltipAttr2" type="attribute" dataSource="scheduleData" required="false">
+                <caption>Tooltip Line 2</caption>
+                <description>Second custom line in the hover tooltip.</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                </attributeTypes>
+            </property>
+
+            <property key="planActualAttr" type="attribute" dataSource="scheduleData" required="false">
+                <caption>Plan / Actual</caption>
+                <description>Optional attribute that splits each bay column into Plan (left) and Actual (right) sub-columns. Values containing "actual" (case-insensitive) go to the Actual sub-column; all other values go to Plan.</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                    <attributeType name="Enum" />
+                </attributeTypes>
+            </property>
+
+            <property key="displayDate" type="attribute" required="false">
+                <caption>Display Date</caption>
+                <description>DateTime attribute controlling which day's schedule is shown. Defaults to today when empty.</description>
+                <attributeTypes>
+                    <attributeType name="DateTime" />
+                    <attributeType name="String" />
+                </attributeTypes>
+            </property>
+
+        </propertyGroup>
+
+        <!-- ═══════════ BAY STATUS ═══════════ -->
+        <propertyGroup caption="Bay Status">
+
+            <property key="bayData" type="datasource" isList="true" required="false">
+                <caption>Bay Status Data</caption>
+                <description>Separate list of bay objects — one row per bay. Provides the status indicator color and truck occupancy icon in bay column headers.</description>
+            </property>
+
+            <property key="bayIdForStatusAttr" type="attribute" dataSource="bayData" required="false">
+                <caption>Bay ID</caption>
+                <description>Attribute identifying the bay — must match the Bay ID values in Schedule Data.</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                    <attributeType name="Enum" />
+                </attributeTypes>
+            </property>
+
+            <property key="bayColorAttr" type="attribute" dataSource="bayData" required="false">
+                <caption>Color</caption>
+                <description>Bay status color for the indicator. Accepted values: "available"/"green" → green, "occupied"/"blue" → blue, "maintenance"/"red" → red, or any CSS hex color (#rrggbb).</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                    <attributeType name="Enum" />
+                </attributeTypes>
+            </property>
+
+            <property key="bayOccupancyAttr" type="attribute" dataSource="bayData" required="false">
+                <caption>Occupancy</caption>
+                <description>Controls the truck icon: "occupied"/"yes"/"true" → filled truck; "available"/"no"/"false" → outlined truck.</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                    <attributeType name="Enum" />
+                    <attributeType name="Boolean" />
+                </attributeTypes>
+            </property>
+
+            <property key="baySortAttr" type="attribute" dataSource="bayData" required="false">
+                <caption>Sort Order</caption>
+                <description>Numeric attribute defining column display order — lower numbers appear first.</description>
+                <attributeTypes>
+                    <attributeType name="Integer" />
+                    <attributeType name="Long" />
+                    <attributeType name="Decimal" />
+                    <attributeType name="AutoNumber" />
+                </attributeTypes>
+            </property>
+
+        </propertyGroup>
+
+        <!-- ═══════════ ACTIONS ═══════════ -->
+        <propertyGroup caption="Actions">
+
+            <property key="onTruckClick" type="action" dataSource="scheduleData" required="false">
+                <caption>On Truck Block Click</caption>
+                <description>Action triggered when an existing truck block is clicked.</description>
+            </property>
+
+            <property key="onScheduleChange" type="action" dataSource="scheduleData" required="false">
+                <caption>On Schedule Change (drag / resize)</caption>
+                <description>Action called after a block is moved or resized. window.__TruckSchedulerPendingEdit is populated with {newStartISO, newEndISO, newBayId} before firing.</description>
+            </property>
+
+            <property key="onEmptySlotClick" type="action" required="false">
+                <caption>On Empty Slot Click</caption>
+                <description>Action triggered when the user clicks an empty bay-time slot. window.__TruckSchedulerNewSlot is set to {bayId, startISO, endISO} before firing.</description>
+            </property>
+
+        </propertyGroup>
+
+        <!-- ═══════════ DISPLAY ═══════════ -->
+        <propertyGroup caption="Display">
+
+            <property key="rowHeight" type="integer" defaultValue="20" required="true">
+                <caption>Slot Height (px)</caption>
+                <description>Pixel height of each 5-minute time slot in the grid. Default 20. Increase for larger touch targets.</description>
+            </property>
+
+            <property key="resourceLabel" type="string" defaultValue="Bay" required="false">
+                <caption>Time Column Label</caption>
+                <description>Header text for the left-hand time column — e.g. "Time", "Schedule".</description>
+            </property>
+
+            <property key="rowsPerPage" type="integer" defaultValue="12" required="true">
+                <caption>Bays Per Page</caption>
+                <description>Maximum number of bay columns visible at once. Navigation arrows page through the rest. Set to 0 to show all bays.</description>
+            </property>
+
+            <property key="timeRangeStart" type="integer" defaultValue="0" required="true">
+                <caption>Time Range Start (hour 0-23)</caption>
+                <description>First hour shown on timeline. 0 = midnight. Overridden by Time Range Start Variable if set.</description>
+            </property>
+
+            <property key="timeRangeEnd" type="integer" defaultValue="24" required="true">
+                <caption>Time Range End (hour 1-24)</caption>
+                <description>Last hour shown on timeline. 24 = midnight. Overridden by Time Range End Variable if set.</description>
+            </property>
+
+            <property key="timeRangeStartVar" type="attribute" required="false">
+                <caption>Time Range Start (variable)</caption>
+                <description>Page integer variable that dynamically overrides the static Time Range Start setting.</description>
+                <attributeTypes>
+                    <attributeType name="Integer" />
+                    <attributeType name="Long" />
+                </attributeTypes>
+            </property>
+
+            <property key="timeRangeEndVar" type="attribute" required="false">
+                <caption>Time Range End (variable)</caption>
+                <description>Page integer variable that dynamically overrides the static Time Range End setting.</description>
+                <attributeTypes>
+                    <attributeType name="Integer" />
+                    <attributeType name="Long" />
+                </attributeTypes>
+            </property>
+
+            <property key="showDwellMarkers" type="boolean" defaultValue="true" required="true">
+                <caption>Show 25-Minute Dwell Markers</caption>
+                <description>When enabled, faint horizontal lines appear every 25 minutes to help with visual slot estimation.</description>
+            </property>
+
+            <property key="defaultDwellMinutes" type="integer" defaultValue="25" required="true">
+                <caption>Default Dwell Duration (minutes)</caption>
+                <description>Duration used for new truck blocks created by clicking an empty slot. Default 25 minutes.</description>
+            </property>
+
+            <property key="showActualRows" type="boolean" defaultValue="true" required="true">
+                <caption>Show Actual Sub-Column</caption>
+                <description>When enabled and Plan/Actual attribute is configured, each bay column shows a Plan sub-column and an Actual sub-column side by side. Disable to show only Plan. Can be overridden at runtime via Show Actual Rows Variable.</description>
+            </property>
+
+            <property key="showActualRowsVar" type="attribute" required="false">
+                <caption>Show Actual Sub-Column (variable)</caption>
+                <description>Boolean page variable that dynamically overrides the Show Actual Sub-Column setting.</description>
+                <attributeTypes>
+                    <attributeType name="Boolean" />
+                </attributeTypes>
+            </property>
+
+            <property key="colorScheduled" type="string" defaultValue="#1565C0" required="false">
+                <caption>Color: Scheduled</caption>
+                <description>Block fill color for "Scheduled" status.</description>
+            </property>
+
+            <property key="colorInProgress" type="string" defaultValue="#2E7D32" required="false">
+                <caption>Color: In Progress / Completed</caption>
+                <description>Block fill color for "InProgress" and "Completed" statuses.</description>
+            </property>
+
+            <property key="colorDelayed" type="string" defaultValue="#D84315" required="false">
+                <caption>Color: Delayed</caption>
+                <description>Block fill color for "Delayed" status.</description>
+            </property>
+
+            <property key="colorConflict" type="string" defaultValue="#4527A0" required="false">
+                <caption>Color: Conflict</caption>
+                <description>Block fill color when two trucks overlap the same bay at the same time.</description>
+            </property>
+
+        </propertyGroup>
+
+    </properties>
+</widget>
