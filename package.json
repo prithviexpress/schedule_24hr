@@ -15,7 +15,7 @@
   "scripts": {
     "start": "pluggable-widgets-tools start:web",
     "build": "pluggable-widgets-tools build:web",
-    "postbuild": "find dist -name '*.mpk' | xargs -I{} zip -j {} dist/tmp/widgets/ScheduleWidgetVertical.editorPreview.js 2>/dev/null || true",
+    "postbuild": "bash scripts/postbuild.sh",
     "release": "pluggable-widgets-tools release:web",
     "lint": "pluggable-widgets-tools lint",
     "lint:fix": "pluggable-widgets-tools lint:fix",

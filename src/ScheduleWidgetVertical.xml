@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<widget id="com.prithvi.ScheduleWidgetVertical"
+<widget id="com.prithvi.schedulewidgetvertical.ScheduleWidgetVertical"
         pluginWidget="true"
         needsEntityContext="false"
         supportedPlatform="Web"
