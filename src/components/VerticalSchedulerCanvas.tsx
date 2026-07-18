@@ -14,7 +14,7 @@ import { ScheduleBlock, BayStatus } from "./types";
 const TIME_LABEL_W = 65;   // left column width for HH:MM labels
 const HEADER_H = 52;       // top header height for bay names
 const COL_W = 90;          // width of each bay column
-const SCROLLBAR_W = 10;    // right vertical scrollbar
+const SCROLLBAR_W = 16;    // right vertical scrollbar
 const RESIZE_HIT = 6;      // px from top/bottom block edge to trigger resize
 const MIN_BLOCK_MIN = 5;   // minimum block duration (minutes)
 const SLOT_MINS = 5;       // minutes per time-slot row
@@ -796,6 +796,20 @@ export function VerticalSchedulerCanvas({
         return () => clearInterval(id);
     }, []);
 
+    // Non-passive wheel listener so e.preventDefault() actually stops page scroll
+    const updateScrollYRef = useRef(updateScrollY);
+    useEffect(() => { updateScrollYRef.current = updateScrollY; });
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const onWheel = (e: WheelEvent) => {
+            e.preventDefault();
+            updateScrollYRef.current(scrollYRef.current + e.deltaY);
+        };
+        canvas.addEventListener("wheel", onWheel, { passive: false });
+        return () => canvas.removeEventListener("wheel", onWheel);
+    }, []);
+
     // ─── Hit testing ──────────────────────────────────────────────────────────
 
     // Returns bay column index (or -1) from a canvas-X position
@@ -992,13 +1006,6 @@ export function VerticalSchedulerCanvas({
         setHoverInfo(null);
     }, [drawCanvas]);
 
-    const handleWheel = useCallback(
-        (e: React.WheelEvent<HTMLCanvasElement>) => {
-            e.preventDefault();
-            updateScrollY(scrollYRef.current + e.deltaY);
-        },
-        [updateScrollY]
-    );
 
     // ─── Custom scrollbar ──────────────────────────────────────────────────────
 
@@ -1061,7 +1068,6 @@ export function VerticalSchedulerCanvas({
         <div
             ref={containerRef}
             className="truck-scheduler__canvas-container"
-            style={{ display: "flex", flexDirection: "row" }}
         >
             <canvas
                 ref={canvasRef}
@@ -1071,13 +1077,11 @@ export function VerticalSchedulerCanvas({
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseLeave}
-                onWheel={handleWheel}
                 style={{ display: "block", userSelect: "none" }}
             />
-            {/* Custom scrollbar */}
+            {/* Custom scrollbar — absolutely positioned over the canvas right edge */}
             <div
                 className="truck-scheduler__scrollbar"
-                style={{ height: canvasH, position: "relative" }}
                 onClick={handleScrollbarClick}
             >
                 <div
