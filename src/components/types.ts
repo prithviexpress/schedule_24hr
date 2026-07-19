@@ -13,6 +13,7 @@ export interface ScheduleBlock {
     tooltipText?: string;
     tooltipText2?: string;
     subRow?: "plan" | "actual";
+    isReadOnly?: boolean;   // true for blocks from the separate actualData datasource
 }
 
 export interface BayStatus {

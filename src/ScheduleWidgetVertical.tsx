@@ -19,6 +19,16 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         tooltipAttr2,
         planActualAttr,
         displayDate,
+        actualData,
+        actualTruckIdAttr,
+        actualBayIdAttr,
+        actualStartTimeAttr,
+        actualEndTimeAttr,
+        actualStatusAttr,
+        actualColorAttr,
+        actualTooltipAttr,
+        actualTooltipAttr2,
+        onActualTruckClick,
         bayData,
         bayIdForStatusAttr,
         bayColorAttr,
@@ -52,12 +62,15 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
     // Auto-reload every 60 s
     const bayDataRef = useRef(bayData);
     const scheduleDataRef = useRef(scheduleData);
+    const actualDataRef = useRef(actualData);
     useEffect(() => { bayDataRef.current = bayData; });
     useEffect(() => { scheduleDataRef.current = scheduleData; });
+    useEffect(() => { actualDataRef.current = actualData; });
     useEffect(() => {
         const id = setInterval(() => {
             bayDataRef.current?.reload();
             scheduleDataRef.current?.reload();
+            actualDataRef.current?.reload();
         }, 60000);
         return () => clearInterval(id);
     }, []);
@@ -74,6 +87,9 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         return localDisplayDay;
     }, [displayDate?.value, localDisplayDay]);
 
+    // Whether the separate actualData datasource is active
+    const hasActualDs = !!actualData;
+
     // ── Transform Mendix list → ScheduleBlock[] ───────────────────────────────
     const rawBlocks: ScheduleBlock[] = useMemo(() => {
         if (scheduleData.status !== "available" || !scheduleData.items) return [];
@@ -87,12 +103,13 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
             const color = (colorAttr?.get(item).value as string) ?? "";
             const tooltipText = tooltipAttr ? (tooltipAttr.get(item).displayValue ?? "") : "";
             const tooltipText2 = tooltipAttr2 ? (tooltipAttr2.get(item).displayValue ?? "") : "";
-            const planActualRaw = planActualAttr
-                ? (planActualAttr.get(item).displayValue ?? "").toLowerCase().trim()
-                : "";
-            const subRow: "plan" | "actual" | undefined = planActualAttr
-                ? (planActualRaw.includes("actual") ? "actual" : "plan")
-                : undefined;
+
+            // When actualData datasource is configured, all main blocks are "plan"
+            const subRow: "plan" | "actual" | undefined = hasActualDs
+                ? "plan"
+                : planActualAttr
+                    ? ((planActualAttr.get(item).displayValue ?? "").toLowerCase().trim().includes("actual") ? "actual" : "plan")
+                    : undefined;
 
             if (!startDate || !endDate || !bayId) return [];
 
@@ -104,10 +121,40 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
 
             return [{ item, truckId, bayId, groupId: "__default__", startMin, endMin, status, color, isConflict: false, tooltipText, tooltipText2, subRow }];
         });
-    }, [scheduleData.status, scheduleData.items, displayDay, truckIdAttr, bayIdAttr, startTimeAttr, endTimeAttr, statusAttr, colorAttr, tooltipAttr, tooltipAttr2, planActualAttr]);
+    }, [scheduleData.status, scheduleData.items, displayDay, truckIdAttr, bayIdAttr, startTimeAttr, endTimeAttr, statusAttr, colorAttr, tooltipAttr, tooltipAttr2, planActualAttr, hasActualDs]);
 
-    // Conflict detection (same as horizontal widget)
-    const blocks: ScheduleBlock[] = useMemo(() => detectConflicts(rawBlocks), [rawBlocks]);
+    // ── Transform actualData datasource → ScheduleBlock[] (isReadOnly) ───────
+    const actualBlocks: ScheduleBlock[] = useMemo(() => {
+        if (!actualData || actualData.status !== "available" || !actualData.items) return [];
+        if (!actualTruckIdAttr || !actualBayIdAttr || !actualStartTimeAttr || !actualEndTimeAttr) return [];
+        const dayStart = startOfDay(displayDay);
+        return actualData.items.flatMap((item: ObjectItem) => {
+            const truckId = (actualTruckIdAttr.get(item).value as string) ?? "";
+            const bayId = (actualBayIdAttr.get(item).value as string) ?? "";
+            const startDate = actualStartTimeAttr.get(item).value as Date | undefined;
+            const endDate = actualEndTimeAttr.get(item).value as Date | undefined;
+            const status = (actualStatusAttr?.get(item).value as string) ?? "Scheduled";
+            const color = (actualColorAttr?.get(item).value as string) ?? "";
+            const tooltipText = actualTooltipAttr ? (actualTooltipAttr.get(item).displayValue ?? "") : "";
+            const tooltipText2 = actualTooltipAttr2 ? (actualTooltipAttr2.get(item).displayValue ?? "") : "";
+
+            if (!startDate || !endDate || !bayId) return [];
+
+            const dayEnd = dayStart + 24 * 60 * 60 * 1000;
+            if (endDate.getTime() <= dayStart || startDate.getTime() >= dayEnd) return [];
+
+            const startMin = Math.max(0, (startDate.getTime() - dayStart) / 60000);
+            const endMin = Math.min(1440, (endDate.getTime() - dayStart) / 60000);
+
+            return [{ item, truckId, bayId, groupId: "__default__", startMin, endMin, status, color, isConflict: false, tooltipText, tooltipText2, subRow: "actual", isReadOnly: true }];
+        });
+    }, [actualData?.status, actualData?.items, displayDay, actualTruckIdAttr, actualBayIdAttr, actualStartTimeAttr, actualEndTimeAttr, actualStatusAttr, actualColorAttr, actualTooltipAttr, actualTooltipAttr2]);
+
+    // Conflict detection — runs on merged plan + actual blocks
+    const blocks: ScheduleBlock[] = useMemo(
+        () => detectConflicts([...rawBlocks, ...actualBlocks]),
+        [rawBlocks, actualBlocks]
+    );
 
     // Bay status map
     const bayStatusMap = useMemo(() => {
@@ -142,7 +189,7 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         return m;
     }, [bayData?.status, bayData?.items, bayIdForStatusAttr, baySortAttr]);
 
-    // Sorted flat bay list
+    // Sorted flat bay list (include bays from actual blocks too)
     const bays = useMemo(() => {
         const set = new Set<string>();
         for (const b of blocks) set.add(b.bayId);
@@ -184,13 +231,22 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         [displayDate]
     );
 
-    // Truck click
+    // Truck click (plan blocks from scheduleData)
     const handleTruckClick = useCallback(
         (block: ScheduleBlock) => {
             const action = onTruckClick?.get(block.item);
             if (action?.canExecute) action.execute();
         },
         [onTruckClick]
+    );
+
+    // Truck click (actual blocks from actualData — read-only, separate action)
+    const handleActualTruckClick = useCallback(
+        (block: ScheduleBlock) => {
+            const action = onActualTruckClick?.get(block.item);
+            if (action?.canExecute) action.execute();
+        },
+        [onActualTruckClick]
     );
 
     // Schedule change (drag / resize) — includes newBayId when bay changed
@@ -274,7 +330,7 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
                     bayStatusMap={bayStatusMap}
                     displayDay={displayDay}
                     resourceLabel={resourceLabel || "Time"}
-                    hasPlanActual={!!planActualAttr}
+                    hasPlanActual={!!planActualAttr || hasActualDs}
                     showActualRows={effectiveShowActual}
                     rowHeight={rowHeight ?? 20}
                     showDwellMarkers={showDwellMarkers ?? true}
@@ -286,6 +342,7 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
                     colorDelayed={colorDelayed || "#D84315"}
                     colorConflict={colorConflict || "#4527A0"}
                     onTruckClick={handleTruckClick}
+                    onActualTruckClick={handleActualTruckClick}
                     onScheduleChange={handleScheduleChange}
                     onEmptySlotClick={handleEmptySlotClick}
                 />

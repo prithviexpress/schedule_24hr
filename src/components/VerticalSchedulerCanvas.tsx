@@ -109,6 +109,7 @@ interface DragState {
     currentEnd: number;
     currentBayIdx: number;
     moved: boolean;
+    readOnly: boolean;
 }
 
 interface StatusColors {
@@ -138,6 +139,7 @@ export interface VerticalSchedulerCanvasProps {
     colorDelayed: string;
     colorConflict: string;
     onTruckClick: (block: ScheduleBlock) => void;
+    onActualTruckClick?: (block: ScheduleBlock) => void;
     onScheduleChange: (block: ScheduleBlock, newStartMin: number, newEndMin: number) => void;
     onEmptySlotClick: (bayId: string, startMin: number, endMin: number, defaultDwell: number) => void;
 }
@@ -688,6 +690,7 @@ export function VerticalSchedulerCanvas({
     colorDelayed,
     colorConflict,
     onTruckClick,
+    onActualTruckClick,
     onScheduleChange,
     onEmptySlotClick
 }: VerticalSchedulerCanvasProps): ReactElement {
@@ -786,7 +789,9 @@ export function VerticalSchedulerCanvas({
         palette, resourceLabel, hasPlanActual, showActualRows, computeNowMin
     ]);
 
-    useEffect(() => { drawCanvas(); }, [drawCanvas]);
+    // Redraw when drawCanvas logic changes OR when scrollY state changes
+    // (drawCanvas reads scroll from a ref so scrollY is not in its own deps)
+    useEffect(() => { drawCanvas(); }, [drawCanvas, scrollY]);
     useEffect(() => { updateScrollY(scrollYRef.current); }, [contentH, canvasH, updateScrollY]);
 
     const drawCanvasRef = useRef(drawCanvas);
@@ -894,7 +899,8 @@ export function VerticalSchedulerCanvas({
                     currentStart: hit.block.startMin,
                     currentEnd: hit.block.endMin,
                     currentBayIdx: bayIdx,
-                    moved: false
+                    moved: false,
+                    readOnly: hit.block.isReadOnly ?? false
                 };
             }
         },
@@ -929,6 +935,8 @@ export function VerticalSchedulerCanvas({
             const dx = x - drag.startX;
             if (Math.abs(dy) > 3 || Math.abs(dx) > 3) drag.moved = true;
             if (!drag.moved) return;
+            // Read-only blocks (from actualData) cannot be repositioned
+            if (drag.readOnly) return;
 
             const deltaMin = dy / drag.pxPerMin;
 
@@ -977,7 +985,11 @@ export function VerticalSchedulerCanvas({
             }
 
             if (!drag.moved) {
-                onTruckClick(drag.block);
+                if (drag.readOnly) {
+                    onActualTruckClick?.(drag.block);
+                } else {
+                    onTruckClick(drag.block);
+                }
             } else {
                 const finalBayId = bays[drag.currentBayIdx] ?? drag.block.bayId;
                 onScheduleChange(
