@@ -12,7 +12,7 @@ import { ScheduleBlock, BayStatus } from "./types";
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
 const TIME_LABEL_W = 65;   // left column width for HH:MM labels
-const HEADER_H = 52;       // top header height for bay names
+const HEADER_H = 62;       // top header height for bay names (extra row for bay type)
 const COL_W = 90;          // width of each bay column
 const SCROLLBAR_W = 16;    // right vertical scrollbar
 const RESIZE_HIT = 6;      // px from top/bottom block edge to trigger resize
@@ -125,6 +125,7 @@ export interface VerticalSchedulerCanvasProps {
     blocks: ScheduleBlock[];
     bays: string[];
     bayStatusMap: Map<string, BayStatus>;
+    bayTypeMap?: Map<string, string>;
     displayDay: Date;
     resourceLabel: string;
     hasPlanActual: boolean;
@@ -214,12 +215,23 @@ function drawTruckIconH(
     ctx.restore();
 }
 
+// Blend hex color toward white by `factor` (0=unchanged, 1=white)
+function lightenColor(hex: string, factor: number = 0.55): string {
+    if (!hex || hex.length < 7 || !hex.startsWith("#")) return hex;
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return "#" + [r, g, b]
+        .map(c => Math.round(c + (255 - c) * factor).toString(16).padStart(2, "0"))
+        .join("");
+}
+
 function blockColors(
     block: ScheduleBlock,
     palette: StatusColors
 ): { fill: string; text: string } {
-    if (block.color) return { fill: block.color, text: "#ffffff" };
-    if (block.isConflict) return { fill: palette.conflict, text: "#ffffff" };
+    if (block.color) return { fill: block.color, text: isLightColor(block.color) ? "#333" : "#ffffff" };
+    // Conflicts no longer change the block fill — overlap is shown via hatching overlay
     const s = (block.status ?? "").toLowerCase().replace(/\s+/g, "");
     if (s === "inprogress" || s === "completed" || s === "done" || s === "arrived" || s === "docked")
         return { fill: palette.inProgress, text: "#ffffff" };
@@ -234,12 +246,14 @@ function drawBayHeader(
     ctx: CanvasRenderingContext2D,
     bays: string[],
     bayStatusMap: Map<string, BayStatus>,
+    bayTypeMap: Map<string, string>,
     canvasW: number,
     hasPlanActual: boolean,
     showActualRows: boolean,
     resourceLabel: string
 ): void {
     const split = hasPlanActual && showActualRows;
+    const stripeH = split ? 5 : 0;
 
     // Outer background
     ctx.fillStyle = C.headerBg;
@@ -248,6 +262,7 @@ function drawBayHeader(
     bays.forEach((bayId, idx) => {
         const bx = colX(idx);
         const bayInfo = bayStatusMap.get(bayId);
+        const bayType = bayTypeMap.get(bayId) ?? "";
 
         // Column background
         ctx.fillStyle = idx % 2 === 0 ? C.colEven : C.colOdd;
@@ -256,29 +271,43 @@ function drawBayHeader(
         // Plan/actual bottom stripe
         if (split) {
             ctx.fillStyle = "#1565C0";
-            ctx.fillRect(bx, HEADER_H - 4, COL_W / 2, 4);
+            ctx.fillRect(bx, HEADER_H - stripeH, COL_W / 2, stripeH);
             ctx.fillStyle = "#FB8C00";
-            ctx.fillRect(bx + COL_W / 2, HEADER_H - 4, COL_W / 2, 4);
+            ctx.fillRect(bx + COL_W / 2, HEADER_H - stripeH, COL_W / 2, stripeH);
         }
 
-        // Truck icon
+        // Truck icon — top area
         const statusColor = bayInfo ? bayStatusColor(bayInfo.color) : "";
         const occupied = bayInfo?.occupied ?? null;
         const truckColor = statusColor || (occupied === false ? "#90A4AE" : "#1565C0");
         if (bayInfo !== undefined) {
-            drawTruckIconH(ctx, bx + COL_W / 2, HEADER_H / 2 - 8, occupied ?? false, truckColor);
+            drawTruckIconH(ctx, bx + COL_W / 2, 13, occupied ?? false, truckColor);
         }
 
-        // Bay label
+        // Bay name + bay type labels
         ctx.save();
         ctx.beginPath();
         ctx.rect(bx + 2, 0, COL_W - 4, HEADER_H);
         ctx.clip();
-        ctx.fillStyle = C.labelText;
-        ctx.font = "bold 11px sans-serif";
         ctx.textAlign = "center";
-        ctx.textBaseline = "bottom";
-        ctx.fillText(bayId, bx + COL_W / 2, HEADER_H - (split ? 7 : 4));
+        const cx = bx + COL_W / 2;
+        const bottomY = HEADER_H - stripeH - 2;
+
+        if (bayType) {
+            // Two lines: name above, type below
+            ctx.fillStyle = C.labelText;
+            ctx.font = "bold 11px sans-serif";
+            ctx.textBaseline = "bottom";
+            ctx.fillText(bayId, cx, bottomY - 13);
+            ctx.fillStyle = C.headerText;
+            ctx.font = "10px sans-serif";
+            ctx.fillText(bayType, cx, bottomY);
+        } else {
+            ctx.fillStyle = C.labelText;
+            ctx.font = "bold 11px sans-serif";
+            ctx.textBaseline = "bottom";
+            ctx.fillText(bayId, cx, bottomY);
+        }
         ctx.restore();
 
         // Column right divider
@@ -479,17 +508,26 @@ function drawVerticalBlock(
     const bh = byBot - byTop;
     if (bh < 2) return;
 
-    const { fill, text } = blockColors(block, palette);
+    const { fill: rawFill } = blockColors(block, palette);
+    const isPlan = block.subRow === "plan";
+    const fill = isPlan ? lightenColor(rawFill, 0.52) : rawFill;
+    const textColor = isPlan || isLightColor(fill) ? "#333" : "#fff";
+
     ctx.globalAlpha = isDragging ? 0.72 : 1;
 
     drawRoundedRect(ctx, bx, byTop, bw, bh, 4);
     ctx.fillStyle = fill;
     ctx.fill();
 
-    if (block.isConflict) {
-        ctx.strokeStyle = "#b71c1c";
+    if (isPlan) {
+        // Dotted outline in the original (darker) color
+        ctx.save();
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = rawFill;
         ctx.lineWidth = 1.5;
         ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
     }
 
     // Top/bottom resize handle bands
@@ -505,7 +543,7 @@ function drawVerticalBlock(
         ctx.beginPath();
         ctx.rect(bx + 2, byTop + RESIZE_HIT, bw - 4, bh - RESIZE_HIT * 2);
         ctx.clip();
-        ctx.fillStyle = text;
+        ctx.fillStyle = textColor;
         ctx.textAlign = "center";
         const cx = bx + bw / 2;
         const innerH = bh - RESIZE_HIT * 2;
@@ -568,6 +606,99 @@ function drawNowContentLine(
     ctx.restore();
 }
 
+// Draw diagonal hatching over the exact overlap region of conflicting blocks
+function drawConflictHatching(
+    ctx: CanvasRenderingContext2D,
+    blocks: ScheduleBlock[],
+    bayIdxMap: Map<string, number>,
+    bays: string[],
+    rangeStartMin: number,
+    rangeEndMin: number,
+    pxPerMin: number,
+    hasPlanActual: boolean,
+    showActualRows: boolean
+): void {
+    // Group all blocks by bay+subRow key
+    const byKey = new Map<string, ScheduleBlock[]>();
+    for (const b of blocks) {
+        if (!b.isConflict) continue;
+        const key = b.subRow ? `${b.bayId}::${b.subRow}` : b.bayId;
+        const list = byKey.get(key);
+        if (list) list.push(b); else byKey.set(key, [b]);
+    }
+    if (byKey.size === 0) return;
+
+    const split = hasPlanActual && showActualRows;
+
+    byKey.forEach((grp, key) => {
+        const [bayId, subRow] = key.split("::") as [string, ("plan" | "actual") | undefined];
+        const bayIdx = bayIdxMap.get(bayId) ?? -1;
+        if (bayIdx < 0 || bayIdx >= bays.length) return;
+
+        // Determine X range of the sub-column
+        let bx: number, bw: number;
+        if (split) {
+            bw = COL_W / 2;
+            bx = subRow === "actual" ? colX(bayIdx) + bw : colX(bayIdx);
+        } else {
+            bx = colX(bayIdx);
+            bw = COL_W;
+        }
+
+        // Find all pairwise overlaps
+        grp.sort((a, b) => a.startMin - b.startMin);
+        const intervals: Array<[number, number]> = [];
+        for (let i = 0; i < grp.length; i++) {
+            for (let j = i + 1; j < grp.length; j++) {
+                if (grp[j].startMin >= grp[i].endMin) break;
+                const os = Math.max(grp[i].startMin, grp[j].startMin);
+                const oe = Math.min(grp[i].endMin, grp[j].endMin);
+                if (oe > os) intervals.push([os, oe]);
+            }
+        }
+        if (intervals.length === 0) return;
+
+        // Merge adjacent intervals
+        intervals.sort((a, b) => a[0] - b[0]);
+        const merged: Array<[number, number]> = [intervals[0]];
+        for (let i = 1; i < intervals.length; i++) {
+            const last = merged[merged.length - 1];
+            if (intervals[i][0] <= last[1]) last[1] = Math.max(last[1], intervals[i][1]);
+            else merged.push(intervals[i]);
+        }
+
+        // Draw hatching for each merged overlap interval
+        for (const [os, oe] of merged) {
+            const y1 = minToContentY(Math.max(os, rangeStartMin), rangeStartMin, pxPerMin);
+            const y2 = minToContentY(Math.min(oe, rangeEndMin), rangeStartMin, pxPerMin);
+            if (y2 <= y1) continue;
+            const h = y2 - y1;
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(bx, y1, bw, h);
+            ctx.clip();
+
+            // Semi-transparent red tint
+            ctx.fillStyle = "rgba(220, 40, 40, 0.12)";
+            ctx.fillRect(bx, y1, bw, h);
+
+            // Diagonal stripes at 45°
+            ctx.strokeStyle = "rgba(200, 30, 30, 0.5)";
+            ctx.lineWidth = 1.2;
+            const spacing = 6;
+            for (let d = -h; d < bw + h; d += spacing) {
+                ctx.beginPath();
+                ctx.moveTo(bx + d, y1);
+                ctx.lineTo(bx + d + h, y2);
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        }
+    });
+}
+
 // ─── Main render function ─────────────────────────────────────────────────────
 
 interface RenderParams {
@@ -588,13 +719,14 @@ interface RenderParams {
     resourceLabel: string;
     hasPlanActual: boolean;
     showActualRows: boolean;
+    bayTypeMap: Map<string, string>;
 }
 
 function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
     const {
         blocks, bays, bayIdxMap, bayStatusMap, scrollY, canvasW, canvasH,
         pxPerMin, showDwell, drag, rangeStart, rangeEnd, nowMin, palette,
-        resourceLabel, hasPlanActual, showActualRows
+        resourceLabel, hasPlanActual, showActualRows, bayTypeMap
     } = p;
 
     const rangeStartMin = rangeStart * 60;
@@ -650,10 +782,17 @@ function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
         );
     }
 
+    // Conflict hatching drawn over all blocks, still in content-space
+    drawConflictHatching(
+        ctx, blocks, bayIdxMap, bays,
+        rangeStartMin, rangeEndMin, pxPerMin,
+        hasPlanActual, showActualRows
+    );
+
     ctx.restore();
 
     // ── Fixed bay header (drawn on top) ─────────────────────────────────────────
-    drawBayHeader(ctx, bays, bayStatusMap, canvasW, hasPlanActual, showActualRows, resourceLabel);
+    drawBayHeader(ctx, bays, bayStatusMap, bayTypeMap, canvasW, hasPlanActual, showActualRows, resourceLabel);
 
     // ── Custom scrollbar (drawn directly on canvas, not translated) ─────────────
     const contentH = (rangeEndMin - rangeStartMin) * pxPerMin;
@@ -676,6 +815,7 @@ export function VerticalSchedulerCanvas({
     blocks,
     bays,
     bayStatusMap,
+    bayTypeMap = new Map(),
     displayDay,
     resourceLabel,
     hasPlanActual,
@@ -781,10 +921,11 @@ export function VerticalSchedulerCanvas({
             palette,
             resourceLabel: resourceLabel || "Time",
             hasPlanActual,
-            showActualRows
+            showActualRows,
+            bayTypeMap
         });
     }, [
-        blocks, bays, bayIdxMap, bayStatusMap, canvasW, canvasH,
+        blocks, bays, bayIdxMap, bayStatusMap, bayTypeMap, canvasW, canvasH,
         pxPerMin, showDwellMarkers, timeRangeStart, timeRangeEnd,
         palette, resourceLabel, hasPlanActual, showActualRows, computeNowMin
     ]);

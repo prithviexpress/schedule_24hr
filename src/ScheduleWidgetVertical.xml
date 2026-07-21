@@ -236,6 +236,15 @@
                 </attributeTypes>
             </property>
 
+            <property key="bayTypeAttr" type="attribute" dataSource="bayData" required="false">
+                <caption>Bay Type</caption>
+                <description>Optional label shown below the bay name in the column header (e.g. "Inbound", "Outbound", "Cold").</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                    <attributeType name="Enum" />
+                </attributeTypes>
+            </property>
+
         </propertyGroup>
 
         <!-- ═══════════ ACTIONS ═══════════ -->

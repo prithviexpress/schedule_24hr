@@ -28,6 +28,7 @@ export interface ScheduleWidgetVerticalContainerProps {
     bayColorAttr?: ListAttributeValue<string>;
     bayOccupancyAttr?: ListAttributeValue<string | boolean>;
     baySortAttr?: ListAttributeValue<Big>;
+    bayTypeAttr?: ListAttributeValue<string>;
     actualData?: ListValue;
     actualTruckIdAttr?: ListAttributeValue<string>;
     actualBayIdAttr?: ListAttributeValue<string>;
@@ -85,6 +86,7 @@ export interface ScheduleWidgetVerticalPreviewProps {
     bayColorAttr: string;
     bayOccupancyAttr: string;
     baySortAttr: string;
+    bayTypeAttr: string;
     actualData: {} | { caption: string } | { type: string } | null;
     actualTruckIdAttr: string;
     actualBayIdAttr: string;

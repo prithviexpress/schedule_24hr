@@ -34,6 +34,7 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         bayColorAttr,
         bayOccupancyAttr,
         baySortAttr,
+        bayTypeAttr,
         onTruckClick,
         onScheduleChange,
         onEmptySlotClick,
@@ -189,6 +190,19 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         return m;
     }, [bayData?.status, bayData?.items, bayIdForStatusAttr, baySortAttr]);
 
+    // Bay type map (bayId → type label)
+    const bayTypeMap = useMemo(() => {
+        const m = new Map<string, string>();
+        if (bayData?.status !== "available" || !bayData.items || !bayIdForStatusAttr || !bayTypeAttr) return m;
+        for (const item of bayData.items) {
+            const bayId = bayIdForStatusAttr.get(item).displayValue ?? "";
+            if (!bayId) continue;
+            const v = bayTypeAttr.get(item).displayValue ?? "";
+            if (v) m.set(bayId, v);
+        }
+        return m;
+    }, [bayData?.status, bayData?.items, bayIdForStatusAttr, bayTypeAttr]);
+
     // Sorted flat bay list (include bays from actual blocks too)
     const bays = useMemo(() => {
         const set = new Set<string>();
@@ -328,6 +342,7 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
                     blocks={blocks}
                     bays={pagedBays}
                     bayStatusMap={bayStatusMap}
+                    bayTypeMap={bayTypeMap}
                     displayDay={displayDay}
                     resourceLabel={resourceLabel || "Time"}
                     hasPlanActual={!!planActualAttr || hasActualDs}
