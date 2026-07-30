@@ -208,6 +208,15 @@
     white-space: nowrap;
 }
 
+.truck-scheduler__tooltip-truck {
+    font-weight: 700;
+    font-size: 13px;
+    margin-bottom: 5px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+}
+
 .truck-scheduler__tooltip-title {
     font-weight: 700;
     font-size: 13px;
@@ -218,8 +227,20 @@
 }
 
 .truck-scheduler__tooltip-row {
-    display: block;
+    display: flex;
+    gap: 0;
     color: #ccc8c2;
+}
+
+.truck-scheduler__tooltip-label {
+    font-weight: 500;
+    color: #9e9a94;
+    flex-shrink: 0;
+}
+
+.truck-scheduler__tooltip-label::after {
+    content: ": ";
+    white-space: pre;
 }
 
 .truck-scheduler__tooltip-extra {

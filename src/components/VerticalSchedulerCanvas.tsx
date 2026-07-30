@@ -13,7 +13,7 @@ import { ScheduleBlock, BayStatus } from "./types";
 // ─── Layout constants ─────────────────────────────────────────────────────────
 const TIME_LABEL_W = 65;   // left column width for HH:MM labels
 const HEADER_H = 62;       // top header height for bay names (extra row for bay type)
-const COL_W = 90;          // width of each bay column
+let COL_W = 90;            // width of each bay column — updated per render by renderCanvas
 const SCROLLBAR_W = 16;    // right vertical scrollbar
 const RESIZE_HIT = 6;      // px from top/bottom block edge to trigger resize
 const MIN_BLOCK_MIN = 5;   // minimum block duration (minutes)
@@ -135,6 +135,7 @@ export interface VerticalSchedulerCanvasProps {
     defaultDwellMinutes: number;
     timeRangeStart: number;   // hour 0-23
     timeRangeEnd: number;     // hour 1-24
+    columnWidth?: number;    // 0 or omit = auto-fit to container width
     colorScheduled: string;
     colorInProgress: string;
     colorDelayed: string;
@@ -720,14 +721,18 @@ interface RenderParams {
     hasPlanActual: boolean;
     showActualRows: boolean;
     bayTypeMap: Map<string, string>;
+    colW: number;
 }
 
 function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
     const {
         blocks, bays, bayIdxMap, bayStatusMap, scrollY, canvasW, canvasH,
         pxPerMin, showDwell, drag, rangeStart, rangeEnd, nowMin, palette,
-        resourceLabel, hasPlanActual, showActualRows, bayTypeMap
+        resourceLabel, hasPlanActual, showActualRows, bayTypeMap, colW
     } = p;
+
+    // Update module-level COL_W so all drawing helpers use the current value
+    COL_W = colW;
 
     const rangeStartMin = rangeStart * 60;
     const rangeEndMin = rangeEnd * 60;
@@ -816,6 +821,7 @@ export function VerticalSchedulerCanvas({
     bays,
     bayStatusMap,
     bayTypeMap = new Map(),
+    columnWidth = 0,
     displayDay,
     resourceLabel,
     hasPlanActual,
@@ -904,6 +910,11 @@ export function VerticalSchedulerCanvas({
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
+        // Compute column width: fixed override if > 0, else auto-fit all visible bays
+        const available = canvasW - TIME_LABEL_W - SCROLLBAR_W;
+        const colW = columnWidth > 0
+            ? columnWidth
+            : bays.length > 0 ? Math.max(50, Math.floor(available / bays.length)) : 90;
         renderCanvas(ctx, {
             blocks,
             bays,
@@ -922,10 +933,11 @@ export function VerticalSchedulerCanvas({
             resourceLabel: resourceLabel || "Time",
             hasPlanActual,
             showActualRows,
-            bayTypeMap
+            bayTypeMap,
+            colW
         });
     }, [
-        blocks, bays, bayIdxMap, bayStatusMap, bayTypeMap, canvasW, canvasH,
+        blocks, bays, bayIdxMap, bayStatusMap, bayTypeMap, columnWidth, canvasW, canvasH,
         pxPerMin, showDwellMarkers, timeRangeStart, timeRangeEnd,
         palette, resourceLabel, hasPlanActual, showActualRows, computeNowMin
     ]);
@@ -1259,7 +1271,7 @@ export function VerticalSchedulerCanvas({
                     {hBlock.subRow && (
                         <div className="truck-scheduler__tooltip-row">
                             <span className="truck-scheduler__tooltip-label">Type</span>
-                            <span style={{ textTransform: "capitalize" }}>{hBlock.subRow}</span>
+                            <span>{hBlock.subRow === "plan" ? "Plan" : "Actual"}</span>
                         </div>
                     )}
                     {hBlock.tooltipText && (

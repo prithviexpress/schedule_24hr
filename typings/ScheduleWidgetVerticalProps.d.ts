@@ -43,6 +43,7 @@ export interface ScheduleWidgetVerticalContainerProps {
     onScheduleChange?: ListActionValue;
     onEmptySlotClick?: ActionValue;
     rowHeight: number;
+    columnWidth: number;
     resourceLabel: string;
     rowsPerPage: number;
     timeRangeStart: number;
@@ -101,6 +102,7 @@ export interface ScheduleWidgetVerticalPreviewProps {
     onScheduleChange: {} | null;
     onEmptySlotClick: {} | null;
     rowHeight: number | null;
+    columnWidth: number | null;
     resourceLabel: string;
     rowsPerPage: number | null;
     timeRangeStart: number | null;

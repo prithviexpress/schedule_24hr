@@ -39,6 +39,7 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         onScheduleChange,
         onEmptySlotClick,
         rowHeight,
+        columnWidth,
         resourceLabel,
         rowsPerPage,
         showActualRows,
@@ -219,14 +220,17 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         });
     }, [blocks, baySortMap]);
 
-    // Reset page on bay list change
-    const prevBaysRef = useRef(bays);
+    // Keep current page on data refresh; only reset when bay IDs actually change
+    const prevBaysKeyRef = useRef<string>("");
     useEffect(() => {
-        if (prevBaysRef.current !== bays) {
-            prevBaysRef.current = bays;
-            setPageIndex(0);
-        }
-    }, [bays]);
+        const key = bays.join("|");
+        if (prevBaysKeyRef.current === key) return; // same bay set — keep page
+        prevBaysKeyRef.current = key;
+        // New bay set: keep page if still valid, else go to last valid page
+        const eBPP = rowsPerPage > 0 ? rowsPerPage : bays.length || 1;
+        const newTotalPages = Math.max(1, Math.ceil(bays.length / eBPP));
+        setPageIndex(prev => Math.min(prev, newTotalPages - 1));
+    }, [bays, rowsPerPage]);
 
     // Pagination
     const effectiveBaysPerPage = rowsPerPage > 0 ? rowsPerPage : bays.length || 1;
@@ -343,6 +347,7 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
                     bays={pagedBays}
                     bayStatusMap={bayStatusMap}
                     bayTypeMap={bayTypeMap}
+                    columnWidth={columnWidth ?? 0}
                     displayDay={displayDay}
                     resourceLabel={resourceLabel || "Time"}
                     hasPlanActual={!!planActualAttr || hasActualDs}
