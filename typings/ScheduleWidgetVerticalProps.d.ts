@@ -102,7 +102,7 @@ export interface ScheduleWidgetVerticalPreviewProps {
     onScheduleChange: {} | null;
     onEmptySlotClick: {} | null;
     rowHeight: number | null;
-    columnWidth: number | null;
+    columnWidth: number;
     resourceLabel: string;
     rowsPerPage: number | null;
     timeRangeStart: number | null;

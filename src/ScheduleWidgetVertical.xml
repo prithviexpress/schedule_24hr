@@ -275,7 +275,7 @@
                 <description>Pixel height of each 5-minute time slot in the grid. Default 20. Increase for larger touch targets.</description>
             </property>
 
-            <property key="columnWidth" type="integer" defaultValue="0" required="false">
+            <property key="columnWidth" type="integer" defaultValue="0" required="true">
                 <caption>Column Width (px)</caption>
                 <description>Fixed pixel width for each bay column. Set to 0 (default) to auto-fit all visible bay columns to the widget width.</description>
             </property>

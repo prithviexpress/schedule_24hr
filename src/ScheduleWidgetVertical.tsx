@@ -347,7 +347,7 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
                     bays={pagedBays}
                     bayStatusMap={bayStatusMap}
                     bayTypeMap={bayTypeMap}
-                    columnWidth={columnWidth ?? 0}
+                    columnWidth={columnWidth}
                     displayDay={displayDay}
                     resourceLabel={resourceLabel || "Time"}
                     hasPlanActual={!!planActualAttr || hasActualDs}
