@@ -15,8 +15,6 @@ interface ToolbarProps {
     onPageChange: (p: number) => void;
     bayFilter: string;
     onBayFilterChange: (v: string) => void;
-    sortByTime: boolean;
-    onSortByTimeToggle: () => void;
 }
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -36,7 +34,7 @@ export function Toolbar({
     displayDay, onDayChange,
     colorScheduled, colorInProgress, colorDelayed, colorConflict,
     pageIndex, totalPages, totalBays, rowsPerPage, resourceLabel, onPageChange,
-    bayFilter, onBayFilterChange, sortByTime, onSortByTimeToggle
+    bayFilter, onBayFilterChange
 }: ToolbarProps): ReactElement {
     return (
         <div className="truck-scheduler__toolbar">
@@ -67,13 +65,6 @@ export function Toolbar({
                         >×</button>
                     )}
                 </div>
-                <button
-                    className={`truck-scheduler__nav-btn truck-scheduler__sort-time-btn${sortByTime ? " truck-scheduler__sort-time-btn--active" : ""}`}
-                    onClick={onSortByTimeToggle}
-                    title={sortByTime ? "Sorted by earliest start — click to restore default order" : "Sort by earliest start time"}
-                >
-                    ⏱ {sortByTime ? "Time ✓" : "Time"}
-                </button>
             </div>
 
             {totalPages > 1 && (

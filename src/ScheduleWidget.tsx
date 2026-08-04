@@ -23,7 +23,7 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         bayIdForStatusAttr,
         bayColorAttr,
         bayOccupancyAttr,
-        baySortAttr,
+        baySortAttr: _baySortAttr,
         actualData,
         actualTruckIdAttr,
         actualBayIdAttr,
@@ -80,7 +80,6 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
     // Pagination
     const [pageIndex, setPageIndex] = useState(0);
     const [bayFilter, setBayFilter] = useState("");
-    const [sortByTime, setSortByTime] = useState(false);
 
     // Resolve which day to display
     const displayDay: Date = useMemo(() => {
@@ -174,47 +173,23 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         return m;
     }, [bayData?.status, bayData?.items, bayIdForStatusAttr, bayColorAttr, bayOccupancyAttr]);
 
-    // ── Bay sort order map (optional) ─────────────────────────────────────────
-    const baySortMap = useMemo(() => {
-        const m = new Map<string, number>();
-        if (bayData?.status !== "available" || !bayData.items || !bayIdForStatusAttr || !baySortAttr) return m;
-        for (const item of bayData.items) {
-            const bayId = bayIdForStatusAttr.get(item).displayValue ?? "";
-            if (!bayId) continue;
-            const v = baySortAttr.get(item).value;
-            if (v != null) m.set(bayId, Number(v));
-        }
-        return m;
-    }, [bayData?.status, bayData?.items, bayIdForStatusAttr, baySortAttr]);
+
 
     // ── Derive sorted + filtered bay list ────────────────────────────────────
     const bays = useMemo(() => {
         const set = new Set<string>();
         for (const b of blocks) set.add(b.bayId);
         const arr = [...set];
-        if (sortByTime) {
-            const earliest = new Map<string, number>();
-            for (const b of blocks) {
-                const cur = earliest.get(b.bayId) ?? Infinity;
-                if (b.startMin < cur) earliest.set(b.bayId, b.startMin);
-            }
-            arr.sort((a, b) => (earliest.get(a) ?? Infinity) - (earliest.get(b) ?? Infinity));
-        } else {
-            arr.sort((a, b) => {
-                if (baySortMap.size > 0) {
-                    const sa = baySortMap.get(a);
-                    const sb = baySortMap.get(b);
-                    if (sa != null && sb != null) return sa - sb;
-                    if (sa != null) return -1;
-                    if (sb != null) return 1;
-                }
-                return naturalCompare(a, b);
-            });
+        const earliest = new Map<string, number>();
+        for (const b of blocks) {
+            const cur = earliest.get(b.bayId) ?? Infinity;
+            if (b.startMin < cur) earliest.set(b.bayId, b.startMin);
         }
+        arr.sort((a, b) => (earliest.get(a) ?? Infinity) - (earliest.get(b) ?? Infinity));
         if (!bayFilter.trim()) return arr;
         const q = bayFilter.trim().toLowerCase();
         return arr.filter(id => id.toLowerCase().includes(q));
-    }, [blocks, baySortMap, sortByTime, bayFilter]);
+    }, [blocks, bayFilter]);
 
     // Keep current page on data refresh; only update when stable (not loading)
     const prevBaysKeyRef = useRef<string>("");
@@ -334,8 +309,6 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
                 onPageChange={setPageIndex}
                 bayFilter={bayFilter}
                 onBayFilterChange={v => { setBayFilter(v); setPageIndex(0); }}
-                sortByTime={sortByTime}
-                onSortByTimeToggle={() => setSortByTime(s => !s)}
             />
 
             <div className="truck-scheduler__canvas-wrapper">
@@ -411,21 +384,3 @@ function detectConflicts(blocks: ScheduleBlock[]): ScheduleBlock[] {
     return result;
 }
 
-// Natural sort: "Bay-2" < "Bay-10" < "Bay-20"
-function naturalCompare(a: string, b: string): number {
-    const re = /(\d+)/g;
-    const pa = a.split(re);
-    const pb = b.split(re);
-    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-        const sa = pa[i] ?? "";
-        const sb = pb[i] ?? "";
-        const na = Number(sa);
-        const nb = Number(sb);
-        if (!isNaN(na) && !isNaN(nb)) {
-            if (na !== nb) return na - nb;
-        } else {
-            if (sa !== sb) return sa < sb ? -1 : 1;
-        }
-    }
-    return 0;
-}

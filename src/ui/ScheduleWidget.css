@@ -135,17 +135,6 @@
     color: #333;
 }
 
-.truck-scheduler__sort-time-btn {
-    font-size: 12px;
-    white-space: nowrap;
-}
-
-.truck-scheduler__sort-time-btn--active {
-    background: #d4e8ff;
-    border-color: #7ab5e8;
-    color: #1a5fa8;
-    font-weight: 600;
-}
 
 /* ─── Legend ─────────────────────────────────────────────────────────── */
 
