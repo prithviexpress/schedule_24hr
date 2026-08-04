@@ -201,16 +201,18 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         });
     }, [blocks, baySortMap]);
 
-    // Keep current page on data refresh; only reset when bay IDs actually change
+    // Keep current page on data refresh; only update when stable (not loading)
     const prevBaysKeyRef = useRef<string>("");
+    const isAnyLoading = scheduleData.status === "loading" || (!!actualData && actualData.status === "loading");
     useEffect(() => {
+        if (isAnyLoading) return; // ignore transient loading state
         const key = bays.join("|");
         if (prevBaysKeyRef.current === key) return;
         prevBaysKeyRef.current = key;
         const eBPP = rowsPerPage > 0 ? rowsPerPage : bays.length || 1;
         const newTotalPages = Math.max(1, Math.ceil(bays.length / eBPP));
         setPageIndex(prev => Math.min(prev, newTotalPages - 1));
-    }, [bays, rowsPerPage]);
+    }, [bays, rowsPerPage, isAnyLoading]);
 
     // ── Pagination ────────────────────────────────────────────────────────────
     const effectiveRowsPerPage = rowsPerPage > 0 ? rowsPerPage : bays.length || 1;
@@ -313,6 +315,7 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
                 totalPages={totalPages}
                 totalBays={bays.length}
                 rowsPerPage={effectiveRowsPerPage}
+                resourceLabel={resourceLabel || "Bay"}
                 onPageChange={setPageIndex}
             />
 

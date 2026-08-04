@@ -11,6 +11,7 @@ interface ToolbarProps {
     totalPages: number;
     totalBays: number;
     rowsPerPage: number;
+    resourceLabel: string;
     onPageChange: (p: number) => void;
 }
 
@@ -30,7 +31,7 @@ function shiftDay(d: Date, delta: number): Date {
 export function Toolbar({
     displayDay, onDayChange,
     colorScheduled, colorInProgress, colorDelayed, colorConflict,
-    pageIndex, totalPages, totalBays, rowsPerPage, onPageChange
+    pageIndex, totalPages, totalBays, rowsPerPage, resourceLabel, onPageChange
 }: ToolbarProps): ReactElement {
     return (
         <div className="truck-scheduler__toolbar">
@@ -50,6 +51,7 @@ export function Toolbar({
                     totalPages={totalPages}
                     totalBays={totalBays}
                     rowsPerPage={rowsPerPage}
+                    resourceLabel={resourceLabel}
                     onPageChange={onPageChange}
                 />
             )}
@@ -66,11 +68,12 @@ export function Toolbar({
     );
 }
 
-function Pagination({ pageIndex, totalPages, totalBays, rowsPerPage, onPageChange }: {
+function Pagination({ pageIndex, totalPages, totalBays, rowsPerPage, resourceLabel, onPageChange }: {
     pageIndex: number;
     totalPages: number;
     totalBays: number;
     rowsPerPage: number;
+    resourceLabel: string;
     onPageChange: (p: number) => void;
 }): ReactElement {
     const startRow = pageIndex * rowsPerPage + 1;
@@ -84,7 +87,7 @@ function Pagination({ pageIndex, totalPages, totalBays, rowsPerPage, onPageChang
                 title="Previous bays"
             >‹</button>
             <span className="truck-scheduler__page-label">
-                Bays {startRow}–{endRow} / {totalBays}
+                {resourceLabel} {startRow}–{endRow} / {totalBays}
             </span>
             <button
                 className="truck-scheduler__nav-btn"

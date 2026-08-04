@@ -221,8 +221,10 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
     }, [blocks, baySortMap]);
 
     // Keep current page on data refresh; only reset when bay IDs actually change
+    const isAnyLoading = scheduleData.status === "loading" || (!!actualData && actualData.status === "loading");
     const prevBaysKeyRef = useRef<string>("");
     useEffect(() => {
+        if (isAnyLoading) return;
         const key = bays.join("|");
         if (prevBaysKeyRef.current === key) return; // same bay set — keep page
         prevBaysKeyRef.current = key;
@@ -230,7 +232,7 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         const eBPP = rowsPerPage > 0 ? rowsPerPage : bays.length || 1;
         const newTotalPages = Math.max(1, Math.ceil(bays.length / eBPP));
         setPageIndex(prev => Math.min(prev, newTotalPages - 1));
-    }, [bays, rowsPerPage]);
+    }, [bays, rowsPerPage, isAnyLoading]);
 
     // Pagination
     const effectiveBaysPerPage = rowsPerPage > 0 ? rowsPerPage : bays.length || 1;
@@ -332,6 +334,7 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
                 totalPages={totalPages}
                 totalBays={bays.length}
                 rowsPerPage={effectiveBaysPerPage}
+                resourceLabel={resourceLabel || "Bay"}
                 onPageChange={setPageIndex}
             />
 
