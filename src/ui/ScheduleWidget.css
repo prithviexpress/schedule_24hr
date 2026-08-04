@@ -87,6 +87,38 @@
     gap: 8px;
 }
 
+/* ─── Sort control ───────────────────────────────────────────────────── */
+
+.truck-scheduler__sort-control {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    border-right: 1px solid #d0cdc7;
+    padding-right: 10px;
+    margin-right: 2px;
+}
+
+.truck-scheduler__sort-label {
+    font-size: 11px;
+    color: #666;
+    white-space: nowrap;
+}
+
+.truck-scheduler__sort-select {
+    font-size: 12px;
+    padding: 2px 4px;
+    border: 1px solid #c8c4bc;
+    border-radius: 4px;
+    background: #f5f2ed;
+    color: #333;
+    cursor: pointer;
+    outline: none;
+}
+
+.truck-scheduler__sort-select:focus {
+    border-color: #999;
+}
+
 /* ─── Legend ─────────────────────────────────────────────────────────── */
 
 .truck-scheduler__legend {

@@ -2,7 +2,7 @@ import React, { ReactElement, useCallback, useEffect, useMemo, useRef, useState 
 import { ObjectItem } from "mendix";
 import { ScheduleWidgetVerticalContainerProps } from "../typings/ScheduleWidgetVerticalProps";
 import { VerticalSchedulerCanvas } from "./components/VerticalSchedulerCanvas";
-import { Toolbar } from "./components/Toolbar";
+import { Toolbar, SortOption } from "./components/Toolbar";
 import { ScheduleBlock, BayStatus, PendingEdit, NewSlot } from "./components/types";
 import "./ui/ScheduleWidget.css";
 
@@ -79,6 +79,7 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
 
     // Pagination (bays per page, not rows per page — same prop key reused)
     const [pageIndex, setPageIndex] = useState(0);
+    const [sortMode, setSortMode] = useState(() => baySortAttr ? "custom" : "name-asc");
 
     // Resolve display day
     const displayDay: Date = useMemo(() => {
@@ -204,21 +205,38 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         return m;
     }, [bayData?.status, bayData?.items, bayIdForStatusAttr, bayTypeAttr]);
 
+    // ── Sort options available for this widget instance ───────────────────────
+    const sortOptions: SortOption[] = useMemo(() => {
+        const opts: SortOption[] = [
+            { value: "name-asc",  label: "Name A→Z" },
+            { value: "name-desc", label: "Name Z→A" },
+        ];
+        if (bayTypeAttr) opts.push({ value: "type-asc", label: "By type" });
+        if (baySortAttr) opts.unshift({ value: "custom", label: "Custom order" });
+        return opts;
+    }, [!!baySortAttr, !!bayTypeAttr]);
+
     // Sorted flat bay list (include bays from actual blocks too)
     const bays = useMemo(() => {
         const set = new Set<string>();
         for (const b of blocks) set.add(b.bayId);
         return [...set].sort((a, b) => {
-            if (baySortMap.size > 0) {
+            if (sortMode === "custom" && baySortMap.size > 0) {
                 const sa = baySortMap.get(a);
                 const sb = baySortMap.get(b);
                 if (sa != null && sb != null) return sa - sb;
                 if (sa != null) return -1;
                 if (sb != null) return 1;
             }
+            if (sortMode === "name-desc") return naturalCompare(b, a);
+            if (sortMode === "type-asc") {
+                const ta = bayTypeMap.get(a) ?? "";
+                const tb = bayTypeMap.get(b) ?? "";
+                if (ta !== tb) return naturalCompare(ta, tb);
+            }
             return naturalCompare(a, b);
         });
-    }, [blocks, baySortMap]);
+    }, [blocks, baySortMap, bayTypeMap, sortMode]);
 
     // Keep current page on data refresh; only reset when bay IDs actually change
     const isAnyLoading = scheduleData.status === "loading" || (!!actualData && actualData.status === "loading");
@@ -336,6 +354,9 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
                 rowsPerPage={effectiveBaysPerPage}
                 resourceLabel={resourceLabel || "Bay"}
                 onPageChange={setPageIndex}
+                sortMode={sortMode}
+                sortOptions={sortOptions}
+                onSortChange={setSortMode}
             />
 
             <div className="truck-scheduler__canvas-wrapper">

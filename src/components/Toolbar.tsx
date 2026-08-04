@@ -1,5 +1,10 @@
 import React, { ReactElement } from "react";
 
+export interface SortOption {
+    value: string;
+    label: string;
+}
+
 interface ToolbarProps {
     displayDay: Date;
     onDayChange: (d: Date) => void;
@@ -13,6 +18,9 @@ interface ToolbarProps {
     rowsPerPage: number;
     resourceLabel: string;
     onPageChange: (p: number) => void;
+    sortMode: string;
+    sortOptions: SortOption[];
+    onSortChange: (mode: string) => void;
 }
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -31,7 +39,8 @@ function shiftDay(d: Date, delta: number): Date {
 export function Toolbar({
     displayDay, onDayChange,
     colorScheduled, colorInProgress, colorDelayed, colorConflict,
-    pageIndex, totalPages, totalBays, rowsPerPage, resourceLabel, onPageChange
+    pageIndex, totalPages, totalBays, rowsPerPage, resourceLabel, onPageChange,
+    sortMode, sortOptions, onSortChange
 }: ToolbarProps): ReactElement {
     return (
         <div className="truck-scheduler__toolbar">
@@ -57,6 +66,20 @@ export function Toolbar({
             )}
 
             <div className="truck-scheduler__toolbar-right">
+                {sortOptions.length > 1 && (
+                    <div className="truck-scheduler__sort-control">
+                        <span className="truck-scheduler__sort-label">Sort</span>
+                        <select
+                            className="truck-scheduler__sort-select"
+                            value={sortMode}
+                            onChange={e => onSortChange(e.target.value)}
+                        >
+                            {sortOptions.map(o => (
+                                <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                        </select>
+                    </div>
+                )}
                 <Legend
                     scheduled={colorScheduled}
                     inProgress={colorInProgress}
