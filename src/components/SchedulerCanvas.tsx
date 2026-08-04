@@ -89,6 +89,7 @@ interface DragState {
     currentEnd: number;
     currentRowIdx: number;
     moved: boolean;
+    readOnly: boolean;
 }
 
 interface CanvasRow {
@@ -120,6 +121,7 @@ export interface SchedulerCanvasProps {
     colorDelayed: string;
     colorConflict: string;
     onTruckClick: (block: ScheduleBlock) => void;
+    onActualTruckClick?: (block: ScheduleBlock) => void;
     onScheduleChange: (block: ScheduleBlock, newStartMin: number, newEndMin: number) => void;
     onEmptySlotClick: (bayId: string, startMin: number, endMin: number, defaultDwell: number) => void;
 }
@@ -529,6 +531,16 @@ function isLightColor(hex: string): boolean {
     return (r * 299 + g * 587 + b * 114) / 1000 > 140;
 }
 
+function lightenColor(hex: string, factor: number = 0.55): string {
+    if (!hex || hex.length < 7 || !hex.startsWith("#")) return hex;
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return "#" + [r, g, b]
+        .map(c => Math.round(c + (255 - c) * factor).toString(16).padStart(2, "0"))
+        .join("");
+}
+
 function drawBlock(
     ctx: CanvasRenderingContext2D,
     block: ScheduleBlock,
@@ -565,14 +577,25 @@ function drawBlock(
     }
     if (bw < 1 || bh < 1) return;
 
-    const { fill, text } = blockColors(block, palette);
+    const { fill: rawFill, text: rawText } = blockColors(block, palette);
+    const isPlan = block.subRow === "plan";
+    const fill = isPlan ? lightenColor(rawFill, 0.52) : rawFill;
+    const text = isPlan || isLightColor(fill) ? "#333" : rawText;
     ctx.globalAlpha = isDragging ? 0.75 : 1;
 
     drawRoundedRect(ctx, bx, by, bw, bh, 4);
     ctx.fillStyle = fill;
     ctx.fill();
 
-    if (block.isConflict) {
+    if (isPlan) {
+        ctx.save();
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = rawFill;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+    } else if (block.isConflict) {
         ctx.strokeStyle = "#b71c1c";
         ctx.lineWidth = 1.5;
         ctx.stroke();
@@ -710,6 +733,7 @@ export function SchedulerCanvas({
     colorDelayed,
     colorConflict,
     onTruckClick,
+    onActualTruckClick,
     onScheduleChange,
     onEmptySlotClick
 }: SchedulerCanvasProps): ReactElement {
@@ -913,7 +937,8 @@ export function SchedulerCanvas({
                     currentStart: hit.block.startMin,
                     currentEnd: hit.block.endMin,
                     currentRowIdx: rowIdx,
-                    moved: false
+                    moved: false,
+                    readOnly: hit.block.isReadOnly ?? false
                 };
             }
         },
@@ -949,6 +974,7 @@ export function SchedulerCanvas({
             const dx = x - drag.startX;
             if (Math.abs(dx) > 3 || Math.abs(y - drag.startY) > 3) drag.moved = true;
             if (!drag.moved) return;
+            if (drag.readOnly) return;
 
             const deltaMin = dx / drag.pxPerMin;
             const rangeStartMin = timeRangeStart * 60;
@@ -1004,7 +1030,11 @@ export function SchedulerCanvas({
             }
 
             if (!drag.moved) {
-                onTruckClick(drag.block);
+                if (drag.readOnly) {
+                    onActualTruckClick?.(drag.block);
+                } else {
+                    onTruckClick(drag.block);
+                }
             } else {
                 const targetRow = rows[drag.currentRowIdx];
                 const finalBayId = (targetRow?.type === "bay" && targetRow.bayId) ? targetRow.bayId : drag.block.bayId;

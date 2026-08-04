@@ -24,6 +24,16 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         bayColorAttr,
         bayOccupancyAttr,
         baySortAttr,
+        actualData,
+        actualTruckIdAttr,
+        actualBayIdAttr,
+        actualStartTimeAttr,
+        actualEndTimeAttr,
+        actualStatusAttr,
+        actualColorAttr,
+        actualTooltipAttr,
+        actualTooltipAttr2,
+        onActualTruckClick,
         onTruckClick,
         onScheduleChange,
         onEmptySlotClick,
@@ -52,15 +62,20 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
     // Reload all data every 60 s — same cadence as the current-time line
     const bayDataRef = useRef(bayData);
     const scheduleDataRef = useRef(scheduleData);
+    const actualDataRef = useRef(actualData);
     useEffect(() => { bayDataRef.current = bayData; });
     useEffect(() => { scheduleDataRef.current = scheduleData; });
+    useEffect(() => { actualDataRef.current = actualData; });
     useEffect(() => {
         const id = setInterval(() => {
             bayDataRef.current?.reload();
             scheduleDataRef.current?.reload();
+            actualDataRef.current?.reload();
         }, 60000);
         return () => clearInterval(id);
     }, []);
+
+    const hasActualDs = !!actualData;
 
     // Pagination
     const [pageIndex, setPageIndex] = useState(0);
@@ -90,9 +105,12 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
             const tooltipText = tooltipAttr ? (tooltipAttr.get(item).displayValue ?? "") : "";
             const tooltipText2 = tooltipAttr2 ? (tooltipAttr2.get(item).displayValue ?? "") : "";
             const planActualRaw = planActualAttr ? (planActualAttr.get(item).displayValue ?? "").toLowerCase().trim() : "";
-            const subRow: "plan" | "actual" | undefined = planActualAttr
-                ? (planActualRaw.includes("actual") ? "actual" : "plan")
-                : undefined;
+            // When actualData datasource is configured all main blocks become plan
+            const subRow: "plan" | "actual" | undefined = hasActualDs
+                ? "plan"
+                : planActualAttr
+                    ? (planActualRaw.includes("actual") ? "actual" : "plan")
+                    : undefined;
 
             if (!startDate || !endDate || !bayId) return [];
 
@@ -105,10 +123,36 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
 
             return [{ item, truckId, bayId, groupId: "__default__", startMin, endMin, status, color, isConflict: false, tooltipText, tooltipText2, subRow }];
         });
-    }, [scheduleData.status, scheduleData.items, displayDay, truckIdAttr, bayIdAttr, startTimeAttr, endTimeAttr, statusAttr, colorAttr, tooltipAttr, tooltipAttr2, planActualAttr]);
+    }, [scheduleData.status, scheduleData.items, displayDay, truckIdAttr, bayIdAttr, startTimeAttr, endTimeAttr, statusAttr, colorAttr, tooltipAttr, tooltipAttr2, planActualAttr, hasActualDs]);
+
+    // ── Actual blocks from separate datasource ────────────────────────────────
+    const actualBlocks: ScheduleBlock[] = useMemo(() => {
+        if (!actualData || actualData.status !== "available" || !actualData.items) return [];
+        if (!actualTruckIdAttr || !actualBayIdAttr || !actualStartTimeAttr || !actualEndTimeAttr) return [];
+        const dayStart = startOfDay(displayDay);
+        return actualData.items.flatMap((item: ObjectItem) => {
+            const truckId = (actualTruckIdAttr.get(item).value as string) ?? "";
+            const bayId = (actualBayIdAttr.get(item).value as string) ?? "";
+            const startDate = actualStartTimeAttr.get(item).value as Date | undefined;
+            const endDate = actualEndTimeAttr.get(item).value as Date | undefined;
+            const status = (actualStatusAttr?.get(item).value as string) ?? "Scheduled";
+            const color = (actualColorAttr?.get(item).value as string) ?? "";
+            const tooltipText = actualTooltipAttr ? (actualTooltipAttr.get(item).displayValue ?? "") : "";
+            const tooltipText2 = actualTooltipAttr2 ? (actualTooltipAttr2.get(item).displayValue ?? "") : "";
+            if (!startDate || !endDate || !bayId) return [];
+            const dayEnd = dayStart + 24 * 60 * 60 * 1000;
+            if (endDate.getTime() <= dayStart || startDate.getTime() >= dayEnd) return [];
+            const startMin = Math.max(0, (startDate.getTime() - dayStart) / 60000);
+            const endMin = Math.min(1440, (endDate.getTime() - dayStart) / 60000);
+            return [{ item, truckId, bayId, groupId: "__default__", startMin, endMin, status, color, isConflict: false, tooltipText, tooltipText2, subRow: "actual" as const, isReadOnly: true }];
+        });
+    }, [actualData?.status, actualData?.items, displayDay, actualTruckIdAttr, actualBayIdAttr, actualStartTimeAttr, actualEndTimeAttr, actualStatusAttr, actualColorAttr, actualTooltipAttr, actualTooltipAttr2]);
 
     // ── Conflict detection ────────────────────────────────────────────────────
-    const blocks: ScheduleBlock[] = useMemo(() => detectConflicts(rawBlocks), [rawBlocks]);
+    const blocks: ScheduleBlock[] = useMemo(
+        () => detectConflicts([...rawBlocks, ...actualBlocks]),
+        [rawBlocks, actualBlocks]
+    );
 
     // ── Bay status map from dedicated bayData datasource ──────────────────────
     const bayStatusMap = useMemo(() => {
@@ -157,14 +201,16 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         });
     }, [blocks, baySortMap]);
 
-    // Reset to page 0 whenever the bay list changes (day nav, data reload)
-    const prevBaysRef = useRef(bays);
+    // Keep current page on data refresh; only reset when bay IDs actually change
+    const prevBaysKeyRef = useRef<string>("");
     useEffect(() => {
-        if (prevBaysRef.current !== bays) {
-            prevBaysRef.current = bays;
-            setPageIndex(0);
-        }
-    }, [bays]);
+        const key = bays.join("|");
+        if (prevBaysKeyRef.current === key) return;
+        prevBaysKeyRef.current = key;
+        const eBPP = rowsPerPage > 0 ? rowsPerPage : bays.length || 1;
+        const newTotalPages = Math.max(1, Math.ceil(bays.length / eBPP));
+        setPageIndex(prev => Math.min(prev, newTotalPages - 1));
+    }, [bays, rowsPerPage]);
 
     // ── Pagination ────────────────────────────────────────────────────────────
     const effectiveRowsPerPage = rowsPerPage > 0 ? rowsPerPage : bays.length || 1;
@@ -190,6 +236,15 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
             if (action?.canExecute) action.execute();
         },
         [onTruckClick]
+    );
+
+    // ── Actual truck click (read-only blocks from actualData) ─────────────────
+    const handleActualTruckClick = useCallback(
+        (block: ScheduleBlock) => {
+            const action = onActualTruckClick?.get(block.item);
+            if (action?.canExecute) action.execute();
+        },
+        [onActualTruckClick]
     );
 
     // ── Schedule change (drag / resize) ───────────────────────────────────────
@@ -274,7 +329,7 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
                     bayStatusMap={bayStatusMap}
                     displayDay={displayDay}
                     resourceLabel={resourceLabel || "Resource"}
-                    hasPlanActual={!!planActualAttr}
+                    hasPlanActual={!!planActualAttr || hasActualDs}
                     showActualRows={effectiveShowActual}
                     rowHeight={rowHeight ?? 30}
                     showDwellMarkers={showDwellMarkers ?? true}
@@ -286,6 +341,7 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
                     colorDelayed={colorDelayed || "#D84315"}
                     colorConflict={colorConflict || "#4527A0"}
                     onTruckClick={handleTruckClick}
+                    onActualTruckClick={handleActualTruckClick}
                     onScheduleChange={handleScheduleChange}
                     onEmptySlotClick={handleEmptySlotClick}
                 />

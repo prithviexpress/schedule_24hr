@@ -108,6 +108,87 @@
 
         </propertyGroup>
 
+        <!-- ═══════════ ACTUAL DATA ═══════════ -->
+        <propertyGroup caption="Actual Data">
+
+            <property key="actualData" type="datasource" isList="true" required="false">
+                <caption>Actual Schedule Data</caption>
+                <description>Optional separate list of actual schedule entries. When configured, all Schedule Data entries are treated as Plan and these entries as Actual — the Plan/Actual attribute is ignored.</description>
+            </property>
+
+            <property key="actualTruckIdAttr" type="attribute" dataSource="actualData" required="false">
+                <caption>Truck ID</caption>
+                <description>String attribute identifying the truck in the actual entry.</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                </attributeTypes>
+            </property>
+
+            <property key="actualBayIdAttr" type="attribute" dataSource="actualData" required="false">
+                <caption>Bay ID</caption>
+                <description>String attribute identifying the bay in the actual entry.</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                    <attributeType name="Enum" />
+                </attributeTypes>
+            </property>
+
+            <property key="actualStartTimeAttr" type="attribute" dataSource="actualData" required="false">
+                <caption>Start Time</caption>
+                <description>DateTime of actual truck arrival.</description>
+                <attributeTypes>
+                    <attributeType name="DateTime" />
+                </attributeTypes>
+            </property>
+
+            <property key="actualEndTimeAttr" type="attribute" dataSource="actualData" required="false">
+                <caption>End Time</caption>
+                <description>DateTime of actual truck departure.</description>
+                <attributeTypes>
+                    <attributeType name="DateTime" />
+                </attributeTypes>
+            </property>
+
+            <property key="actualStatusAttr" type="attribute" dataSource="actualData" required="false">
+                <caption>Status</caption>
+                <description>Optional status of the actual entry.</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                    <attributeType name="Enum" />
+                </attributeTypes>
+            </property>
+
+            <property key="actualColorAttr" type="attribute" dataSource="actualData" required="false">
+                <caption>Color Override</caption>
+                <description>Optional CSS hex color for actual blocks.</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                </attributeTypes>
+            </property>
+
+            <property key="actualTooltipAttr" type="attribute" dataSource="actualData" required="false">
+                <caption>Tooltip Line 1</caption>
+                <description>First tooltip line shown on actual truck blocks.</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                </attributeTypes>
+            </property>
+
+            <property key="actualTooltipAttr2" type="attribute" dataSource="actualData" required="false">
+                <caption>Tooltip Line 2</caption>
+                <description>Second tooltip line shown on actual truck blocks.</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                </attributeTypes>
+            </property>
+
+            <property key="onActualTruckClick" type="action" dataSource="actualData" required="false">
+                <caption>On Actual Truck Click</caption>
+                <description>Action triggered when an actual truck block is clicked. The context object comes from Actual Schedule Data.</description>
+            </property>
+
+        </propertyGroup>
+
         <!-- ═══════════ BAY STATUS ═══════════ -->
         <propertyGroup caption="Bay Status">
 
