@@ -87,36 +87,64 @@
     gap: 8px;
 }
 
-/* ─── Sort control ───────────────────────────────────────────────────── */
+/* ─── Toolbar center (search + time sort) ────────────────────────────── */
 
-.truck-scheduler__sort-control {
+.truck-scheduler__toolbar-center {
     display: flex;
     align-items: center;
-    gap: 5px;
-    border-right: 1px solid #d0cdc7;
-    padding-right: 10px;
-    margin-right: 2px;
+    gap: 6px;
+    flex: 1;
+    justify-content: center;
 }
 
-.truck-scheduler__sort-label {
-    font-size: 11px;
-    color: #666;
+.truck-scheduler__bay-search {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.truck-scheduler__bay-search-input {
+    font-size: 12px;
+    padding: 4px 24px 4px 8px;
+    border: 1px solid #c8c4bc;
+    border-radius: 4px;
+    background: #fff;
+    color: #333;
+    outline: none;
+    width: 160px;
+    transition: border-color 0.15s;
+}
+
+.truck-scheduler__bay-search-input:focus {
+    border-color: #888;
+}
+
+.truck-scheduler__bay-search-clear {
+    position: absolute;
+    right: 4px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: #999;
+    line-height: 1;
+    padding: 0 2px;
+}
+
+.truck-scheduler__bay-search-clear:hover {
+    color: #333;
+}
+
+.truck-scheduler__sort-time-btn {
+    font-size: 12px;
     white-space: nowrap;
 }
 
-.truck-scheduler__sort-select {
-    font-size: 12px;
-    padding: 2px 4px;
-    border: 1px solid #c8c4bc;
-    border-radius: 4px;
-    background: #f5f2ed;
-    color: #333;
-    cursor: pointer;
-    outline: none;
-}
-
-.truck-scheduler__sort-select:focus {
-    border-color: #999;
+.truck-scheduler__sort-time-btn--active {
+    background: #d4e8ff;
+    border-color: #7ab5e8;
+    color: #1a5fa8;
+    font-weight: 600;
 }
 
 /* ─── Legend ─────────────────────────────────────────────────────────── */

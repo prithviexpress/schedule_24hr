@@ -2,7 +2,7 @@ import React, { ReactElement, useCallback, useEffect, useMemo, useRef, useState 
 import { ObjectItem } from "mendix";
 import { ScheduleWidgetContainerProps } from "../typings/ScheduleWidgetProps";
 import { SchedulerCanvas } from "./components/SchedulerCanvas";
-import { Toolbar, SortOption } from "./components/Toolbar";
+import { Toolbar } from "./components/Toolbar";
 import { ScheduleBlock, BayStatus, PendingEdit, NewSlot } from "./components/types";
 import "./ui/ScheduleWidget.css";
 
@@ -79,7 +79,8 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
 
     // Pagination
     const [pageIndex, setPageIndex] = useState(0);
-    const [sortMode, setSortMode] = useState(() => baySortAttr ? "custom" : "name-asc");
+    const [bayFilter, setBayFilter] = useState("");
+    const [sortByTime, setSortByTime] = useState(false);
 
     // Resolve which day to display
     const displayDay: Date = useMemo(() => {
@@ -186,32 +187,34 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         return m;
     }, [bayData?.status, bayData?.items, bayIdForStatusAttr, baySortAttr]);
 
-    // ── Sort options available for this widget instance ───────────────────────
-    const sortOptions: SortOption[] = useMemo(() => {
-        const opts: SortOption[] = [
-            { value: "name-asc",  label: "Name A→Z" },
-            { value: "name-desc", label: "Name Z→A" },
-        ];
-        if (baySortAttr) opts.unshift({ value: "custom", label: "Custom order" });
-        return opts;
-    }, [!!baySortAttr]);
-
-    // ── Derive sorted flat bay list ───────────────────────────────────────────
+    // ── Derive sorted + filtered bay list ────────────────────────────────────
     const bays = useMemo(() => {
         const set = new Set<string>();
         for (const b of blocks) set.add(b.bayId);
-        return [...set].sort((a, b) => {
-            if (sortMode === "custom" && baySortMap.size > 0) {
-                const sa = baySortMap.get(a);
-                const sb = baySortMap.get(b);
-                if (sa != null && sb != null) return sa - sb;
-                if (sa != null) return -1;
-                if (sb != null) return 1;
+        const arr = [...set];
+        if (sortByTime) {
+            const earliest = new Map<string, number>();
+            for (const b of blocks) {
+                const cur = earliest.get(b.bayId) ?? Infinity;
+                if (b.startMin < cur) earliest.set(b.bayId, b.startMin);
             }
-            if (sortMode === "name-desc") return naturalCompare(b, a);
-            return naturalCompare(a, b);
-        });
-    }, [blocks, baySortMap, sortMode]);
+            arr.sort((a, b) => (earliest.get(a) ?? Infinity) - (earliest.get(b) ?? Infinity));
+        } else {
+            arr.sort((a, b) => {
+                if (baySortMap.size > 0) {
+                    const sa = baySortMap.get(a);
+                    const sb = baySortMap.get(b);
+                    if (sa != null && sb != null) return sa - sb;
+                    if (sa != null) return -1;
+                    if (sb != null) return 1;
+                }
+                return naturalCompare(a, b);
+            });
+        }
+        if (!bayFilter.trim()) return arr;
+        const q = bayFilter.trim().toLowerCase();
+        return arr.filter(id => id.toLowerCase().includes(q));
+    }, [blocks, baySortMap, sortByTime, bayFilter]);
 
     // Keep current page on data refresh; only update when stable (not loading)
     const prevBaysKeyRef = useRef<string>("");
@@ -329,9 +332,10 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
                 rowsPerPage={effectiveRowsPerPage}
                 resourceLabel={resourceLabel || "Bay"}
                 onPageChange={setPageIndex}
-                sortMode={sortMode}
-                sortOptions={sortOptions}
-                onSortChange={setSortMode}
+                bayFilter={bayFilter}
+                onBayFilterChange={v => { setBayFilter(v); setPageIndex(0); }}
+                sortByTime={sortByTime}
+                onSortByTimeToggle={() => setSortByTime(s => !s)}
             />
 
             <div className="truck-scheduler__canvas-wrapper">

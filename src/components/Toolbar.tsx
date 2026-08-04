@@ -1,10 +1,5 @@
 import React, { ReactElement } from "react";
 
-export interface SortOption {
-    value: string;
-    label: string;
-}
-
 interface ToolbarProps {
     displayDay: Date;
     onDayChange: (d: Date) => void;
@@ -18,9 +13,10 @@ interface ToolbarProps {
     rowsPerPage: number;
     resourceLabel: string;
     onPageChange: (p: number) => void;
-    sortMode: string;
-    sortOptions: SortOption[];
-    onSortChange: (mode: string) => void;
+    bayFilter: string;
+    onBayFilterChange: (v: string) => void;
+    sortByTime: boolean;
+    onSortByTimeToggle: () => void;
 }
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -40,7 +36,7 @@ export function Toolbar({
     displayDay, onDayChange,
     colorScheduled, colorInProgress, colorDelayed, colorConflict,
     pageIndex, totalPages, totalBays, rowsPerPage, resourceLabel, onPageChange,
-    sortMode, sortOptions, onSortChange
+    bayFilter, onBayFilterChange, sortByTime, onSortByTimeToggle
 }: ToolbarProps): ReactElement {
     return (
         <div className="truck-scheduler__toolbar">
@@ -51,6 +47,32 @@ export function Toolbar({
                 <span className="truck-scheduler__date-label">{formatDay(displayDay)}</span>
                 <button className="truck-scheduler__nav-btn" onClick={() => onDayChange(shiftDay(displayDay, 1))} title="Next day">
                     ›
+                </button>
+            </div>
+
+            <div className="truck-scheduler__toolbar-center">
+                <div className="truck-scheduler__bay-search">
+                    <input
+                        className="truck-scheduler__bay-search-input"
+                        type="text"
+                        placeholder={`Search ${resourceLabel}…`}
+                        value={bayFilter}
+                        onChange={e => onBayFilterChange(e.target.value)}
+                    />
+                    {bayFilter && (
+                        <button
+                            className="truck-scheduler__bay-search-clear"
+                            onClick={() => onBayFilterChange("")}
+                            title="Clear filter"
+                        >×</button>
+                    )}
+                </div>
+                <button
+                    className={`truck-scheduler__nav-btn truck-scheduler__sort-time-btn${sortByTime ? " truck-scheduler__sort-time-btn--active" : ""}`}
+                    onClick={onSortByTimeToggle}
+                    title={sortByTime ? "Sorted by earliest start — click to restore default order" : "Sort by earliest start time"}
+                >
+                    ⏱ {sortByTime ? "Time ✓" : "Time"}
                 </button>
             </div>
 
@@ -66,20 +88,6 @@ export function Toolbar({
             )}
 
             <div className="truck-scheduler__toolbar-right">
-                {sortOptions.length > 1 && (
-                    <div className="truck-scheduler__sort-control">
-                        <span className="truck-scheduler__sort-label">Sort</span>
-                        <select
-                            className="truck-scheduler__sort-select"
-                            value={sortMode}
-                            onChange={e => onSortChange(e.target.value)}
-                        >
-                            {sortOptions.map(o => (
-                                <option key={o.value} value={o.value}>{o.label}</option>
-                            ))}
-                        </select>
-                    </div>
-                )}
                 <Legend
                     scheduled={colorScheduled}
                     inProgress={colorInProgress}
