@@ -318,6 +318,11 @@
                 </attributeTypes>
             </property>
 
+            <property key="sortByTime" type="boolean" defaultValue="true" required="true">
+                <caption>Sort Bays by Start Time</caption>
+                <description>When enabled, bays are ordered by their earliest truck arrival on the displayed day. Disable to use the natural bay name order.</description>
+            </property>
+
             <property key="showDwellMarkers" type="boolean" defaultValue="true" required="true">
                 <caption>Show 25-Minute Dwell Markers</caption>
                 <description>When enabled, faint horizontal lines appear every 25 minutes to help with visual slot estimation.</description>

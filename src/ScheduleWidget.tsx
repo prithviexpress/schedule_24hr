@@ -42,6 +42,7 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         rowsPerPage,
         showActualRows,
         showActualRowsVar,
+        sortByTime,
         showDwellMarkers,
         defaultDwellMinutes,
         timeRangeStart,
@@ -180,16 +181,20 @@ export function ScheduleWidget(props: ScheduleWidgetContainerProps): ReactElemen
         const set = new Set<string>();
         for (const b of blocks) set.add(b.bayId);
         const arr = [...set];
-        const earliest = new Map<string, number>();
-        for (const b of blocks) {
-            const cur = earliest.get(b.bayId) ?? Infinity;
-            if (b.startMin < cur) earliest.set(b.bayId, b.startMin);
+        if (sortByTime) {
+            const earliest = new Map<string, number>();
+            for (const b of blocks) {
+                const cur = earliest.get(b.bayId) ?? Infinity;
+                if (b.startMin < cur) earliest.set(b.bayId, b.startMin);
+            }
+            arr.sort((a, b) => (earliest.get(a) ?? Infinity) - (earliest.get(b) ?? Infinity));
+        } else {
+            arr.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
         }
-        arr.sort((a, b) => (earliest.get(a) ?? Infinity) - (earliest.get(b) ?? Infinity));
         if (!bayFilter.trim()) return arr;
         const q = bayFilter.trim().toLowerCase();
         return arr.filter(id => id.toLowerCase().includes(q));
-    }, [blocks, bayFilter]);
+    }, [blocks, sortByTime, bayFilter]);
 
     // Keep current page on data refresh; only update when stable (not loading)
     const prevBaysKeyRef = useRef<string>("");

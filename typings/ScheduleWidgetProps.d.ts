@@ -48,6 +48,7 @@ export interface ScheduleWidgetContainerProps {
     timeRangeEnd: number;
     timeRangeStartVar?: EditableValue<Big>;
     timeRangeEndVar?: EditableValue<Big>;
+    sortByTime: boolean;
     showDwellMarkers: boolean;
     defaultDwellMinutes: number;
     showActualRows: boolean;
@@ -105,6 +106,7 @@ export interface ScheduleWidgetPreviewProps {
     timeRangeEnd: number | null;
     timeRangeStartVar: string;
     timeRangeEndVar: string;
+    sortByTime: boolean;
     showDwellMarkers: boolean;
     defaultDwellMinutes: number | null;
     showActualRows: boolean;
