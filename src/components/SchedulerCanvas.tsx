@@ -834,7 +834,8 @@ export function SchedulerCanvas({
         });
     }, [blocks, rows, bayRowMap, bayStatusMap, canvasW, canvasH, rowHeight, showDwellMarkers, timeRangeStart, timeRangeEnd, colorScheduled, colorInProgress, colorDelayed, colorConflict, resourceLabel, hasPlanActual, showActualRows, computeNowMin]);
 
-    useEffect(() => { drawCanvas(); }, [drawCanvas]);
+    // Redraw when canvas content changes OR when scrollY state changes
+    useEffect(() => { drawCanvas(); }, [drawCanvas, scrollY]);
 
     // Re-clamp scroll when layout changes
     useEffect(() => { updateScrollY(scrollYRef.current); }, [totalH, canvasH, updateScrollY]);
@@ -1060,13 +1061,19 @@ export function SchedulerCanvas({
         setHoverInfo(null);
     }, [drawCanvas]);
 
-    const handleWheel = useCallback(
-        (e: React.WheelEvent<HTMLCanvasElement>) => {
+    // Non-passive wheel listener so e.preventDefault() actually stops page scroll
+    const updateScrollYRef = useRef(updateScrollY);
+    useEffect(() => { updateScrollYRef.current = updateScrollY; });
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const onWheel = (e: WheelEvent) => {
             e.preventDefault();
-            updateScrollY(scrollYRef.current + e.deltaY);
-        },
-        [updateScrollY]
-    );
+            updateScrollYRef.current(scrollYRef.current + e.deltaY);
+        };
+        canvas.addEventListener("wheel", onWheel, { passive: false });
+        return () => canvas.removeEventListener("wheel", onWheel);
+    }, []);
 
     // ─── Custom scrollbar ──────────────────────────────────────────────────────
 
@@ -1138,7 +1145,6 @@ export function SchedulerCanvas({
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseLeave}
-                onWheel={handleWheel}
                 style={{ display: "block", userSelect: "none" }}
             />
             {/* Custom scrollbar */}
