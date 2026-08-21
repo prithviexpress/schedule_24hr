@@ -417,21 +417,21 @@ function drawGrid(
         ctx.lineTo(canvasW - SCROLLBAR_W, gy);
         ctx.stroke();
 
-        // Time label
-        if (isHour || isHalfHour) {
-            ctx.fillStyle = isHour ? "#444" : C.headerText;
-            ctx.font = isHour ? "bold 10px sans-serif" : "10px sans-serif";
-            ctx.textAlign = "right";
-            ctx.textBaseline = "top";
+        // Time label — every 5 minutes, styled by significance
+        ctx.textAlign = "right";
+        ctx.textBaseline = "top";
+        if (isHour) {
+            ctx.fillStyle = "#333";
+            ctx.font = "bold 10px sans-serif";
+            ctx.fillText(formatMinutes(m), TIME_LABEL_W - 4, gy + 1);
+        } else if (isHalfHour) {
+            ctx.fillStyle = "#555";
+            ctx.font = "10px sans-serif";
             ctx.fillText(formatMinutes(m), TIME_LABEL_W - 4, gy + 1);
         } else {
-            // Minor tick mark on the right edge of the time label column
-            ctx.strokeStyle = C.gridHour;
-            ctx.lineWidth = 0.5;
-            ctx.beginPath();
-            ctx.moveTo(TIME_LABEL_W - 8, gy);
-            ctx.lineTo(TIME_LABEL_W - 1, gy);
-            ctx.stroke();
+            ctx.fillStyle = C.headerText;
+            ctx.font = "9px sans-serif";
+            ctx.fillText(formatMinutes(m), TIME_LABEL_W - 4, gy + 1);
         }
     }
 
