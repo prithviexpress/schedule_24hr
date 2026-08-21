@@ -270,9 +270,9 @@
         <!-- ═══════════ DISPLAY ═══════════ -->
         <propertyGroup caption="Display">
 
-            <property key="rowHeight" type="integer" defaultValue="20" required="true">
+            <property key="rowHeight" type="integer" defaultValue="18" required="true">
                 <caption>Slot Height (px)</caption>
-                <description>Pixel height of each 5-minute time slot in the grid. Default 20. Increase for larger touch targets.</description>
+                <description>Pixel height of each 5-minute time slot in the grid. Default 18. Increase for larger touch targets.</description>
             </property>
 
             <property key="columnWidth" type="integer" defaultValue="0" required="true">

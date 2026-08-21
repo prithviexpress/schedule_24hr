@@ -52,7 +52,7 @@ const C = {
 function formatMinutes(m: number): string {
     const h = Math.floor(m / 60) % 24;
     const min = Math.floor(m % 60);
-    return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+    return `${h}:${String(min).padStart(2, "0")}`;
 }
 
 function bayStatusColor(status: string): string {
