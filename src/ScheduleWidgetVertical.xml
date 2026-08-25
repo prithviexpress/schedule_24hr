@@ -371,7 +371,7 @@
                 <description>Block fill color when two trucks overlap the same bay at the same time.</description>
             </property>
 
-            <property key="timeWindows" type="string" defaultValue="" required="false">
+            <property key="timeWindows" type="string" defaultValue="6-9:#e3f2fd,9-12:#e8f5e9,12-15:#fffde7,15-18:#fff3e0,18-21:#f3e5f5,21-24:#e3f2fd" required="false">
                 <caption>Time Windows</caption>
                 <description>Comma-separated time bands with background tints. Format: "startH-endH:#hexcolor" — e.g. "6-9:#e3f2fd,9-12:#e8f5e9,12-18:#fff9c4". Hours in 24-hour format (0-24).</description>
             </property>

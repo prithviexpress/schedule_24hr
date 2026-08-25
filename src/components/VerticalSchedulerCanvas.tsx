@@ -11,13 +11,14 @@ import React, {
 import { ScheduleBlock, BayStatus } from "./types";
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
-const TIME_LABEL_W = 65;   // left column width for HH:MM labels
-const HEADER_H = 62;       // top header height for bay names (extra row for bay type)
-let COL_W = 90;            // width of each bay column — updated per render by renderCanvas
-const SCROLLBAR_W = 16;    // right vertical scrollbar
-const RESIZE_HIT = 6;      // px from top/bottom block edge to trigger resize
-const MIN_BLOCK_MIN = 5;   // minimum block duration (minutes)
-const SLOT_MINS = 5;       // minutes per time-slot row
+const TIME_LABEL_W = 65;
+const HEADER_H = 62;
+let COL_W = 90;
+const SCROLLBAR_W = 16;
+const H_SCROLLBAR_H = 12;
+const RESIZE_HIT = 6;
+const MIN_BLOCK_MIN = 5;
+const SLOT_MINS = 5;
 
 // ─── Color palette ────────────────────────────────────────────────────────────
 const C = {
@@ -25,23 +26,18 @@ const C = {
     headerBg: "#f5f2ed",
     headerText: "#777",
     headerBorder: "#dddbd5",
-
     colEven: "#ffffff",
     colOdd: "#faf9f7",
     colBorder: "#eeecea",
     labelBg: "#f7f5f2",
     labelText: "#555",
     labelBorder: "#dddbd5",
-
     gridHour: "#dddbd5",
     gridSlot: "#f0ede8",
     dwellShade: "rgba(180,170,150,0.07)",
-
     blockEdge: "rgba(255,255,255,0.15)",
-
     nowLine: "rgba(229,57,53,0.7)",
     nowPill: "#e53935",
-
     scrollTrack: "#e8e4de",
     scrollThumb: "#bbb8b2",
     scrollThumbHover: "#888"
@@ -78,24 +74,22 @@ function isLightColor(hex: string): boolean {
 // ─── Time window type ─────────────────────────────────────────────────────────
 
 export interface TimeWindow {
-    start: number; // minutes from midnight
+    start: number;
     end: number;
     color: string;
 }
 
 // ─── Coordinate conversions ───────────────────────────────────────────────────
 
-// minute → content-space Y (0 = start of time range)
 function minToContentY(min: number, rangeStartMin: number, pxPerMin: number): number {
     return (min - rangeStartMin) * pxPerMin;
 }
 
-// content-space Y → minute
 function contentYToMin(contentY: number, rangeStartMin: number, pxPerMin: number): number {
     return rangeStartMin + contentY / pxPerMin;
 }
 
-// bay column left edge (canvas-space X)
+// colX returns the content-space X of bay column i (includes TIME_LABEL_W offset)
 function colX(bayIdx: number): number {
     return TIME_LABEL_W + bayIdx * COL_W;
 }
@@ -138,13 +132,12 @@ export interface VerticalSchedulerCanvasProps {
     resourceLabel: string;
     hasPlanActual: boolean;
     showActualRows: boolean;
-    rowHeight: number;        // = slot height in pixels (per 5-min interval)
+    rowHeight: number;
     showDwellMarkers: boolean;
     defaultDwellMinutes: number;
-    timeRangeStart: number;   // hour 0-23
-    timeRangeEnd: number;     // hour 1-24
-    columnWidth?: number;    // 0 or omit = auto-fit to container width
-    forceWidth?: number;     // when set, canvas uses this width instead of container width
+    timeRangeStart: number;
+    timeRangeEnd: number;
+    columnWidth?: number;
     timeWindows?: TimeWindow[];
     colorScheduled: string;
     colorInProgress: string;
@@ -227,7 +220,6 @@ function drawTruckIconH(
     ctx.restore();
 }
 
-// Blend hex color toward white by `factor` (0=unchanged, 1=white)
 function lightenColor(hex: string, factor: number = 0.55): string {
     if (!hex || hex.length < 7 || !hex.startsWith("#")) return hex;
     const r = parseInt(hex.slice(1, 3), 16);
@@ -238,12 +230,8 @@ function lightenColor(hex: string, factor: number = 0.55): string {
         .join("");
 }
 
-function blockColors(
-    block: ScheduleBlock,
-    palette: StatusColors
-): { fill: string; text: string } {
+function blockColors(block: ScheduleBlock, palette: StatusColors): { fill: string; text: string } {
     if (block.color) return { fill: block.color, text: isLightColor(block.color) ? "#333" : "#ffffff" };
-    // Conflicts no longer change the block fill — overlap is shown via hatching overlay
     const s = (block.status ?? "").toLowerCase().replace(/\s+/g, "");
     if (s === "inprogress" || s === "completed" || s === "done" || s === "arrived" || s === "docked")
         return { fill: palette.inProgress, text: "#ffffff" };
@@ -252,35 +240,199 @@ function blockColors(
     return { fill: palette.scheduled, text: isLightColor(palette.scheduled) ? "#333" : "#ffffff" };
 }
 
-// ─── Canvas drawing ───────────────────────────────────────────────────────────
+// ─── Drawing passes ───────────────────────────────────────────────────────────
 
-function drawBayHeader(
+// Pass 1 inner: bay column backgrounds + time windows + dwell + grid lines
+// Called inside translate(-scrollX, HEADER_H - scrollY), clipped to bay area
+function drawBayContentPass(
+    ctx: CanvasRenderingContext2D,
+    bays: string[],
+    rangeStart: number,
+    rangeEnd: number,
+    pxPerMin: number,
+    scrollY: number,
+    viewH: number,
+    showDwell: boolean,
+    hasPlanActual: boolean,
+    showActualRows: boolean,
+    timeWindows: TimeWindow[] | undefined,
+    contentW: number
+): void {
+    const split = hasPlanActual && showActualRows;
+    const rangeStartMin = rangeStart * 60;
+    const rangeEndMin = rangeEnd * 60;
+    const contentH = (rangeEndMin - rangeStartMin) * pxPerMin;
+
+    // Column backgrounds
+    bays.forEach((_id, idx) => {
+        const bx = colX(idx);
+        ctx.fillStyle = idx % 2 === 0 ? C.colEven : C.colOdd;
+        ctx.fillRect(bx, 0, COL_W, contentH);
+        if (split) {
+            ctx.fillStyle = "rgba(255,243,205,0.35)";
+            ctx.fillRect(bx + COL_W / 2, 0, COL_W / 2, contentH);
+        }
+    });
+
+    // Time window bands
+    if (timeWindows && timeWindows.length > 0) {
+        ctx.save();
+        ctx.globalAlpha = 0.32;
+        for (const tw of timeWindows) {
+            const y1 = minToContentY(Math.max(tw.start, rangeStartMin), rangeStartMin, pxPerMin);
+            const y2 = minToContentY(Math.min(tw.end, rangeEndMin), rangeStartMin, pxPerMin);
+            if (y2 <= y1) continue;
+            ctx.fillStyle = tw.color;
+            ctx.fillRect(TIME_LABEL_W, y1, contentW, y2 - y1);
+        }
+        ctx.restore();
+    }
+
+    // Dwell shade
+    if (showDwell) {
+        ctx.fillStyle = C.dwellShade;
+        for (let m = rangeStartMin; m < rangeEndMin; m += 50) {
+            const yTop = minToContentY(m, rangeStartMin, pxPerMin);
+            ctx.fillRect(TIME_LABEL_W, yTop, contentW, 25 * pxPerMin);
+        }
+    }
+
+    // Visible slot range
+    const visMinute = Math.max(rangeStartMin, Math.floor(contentYToMin(scrollY, rangeStartMin, pxPerMin) / SLOT_MINS) * SLOT_MINS - SLOT_MINS);
+    const visMaxMinute = Math.min(rangeEndMin, Math.ceil(contentYToMin(scrollY + viewH, rangeStartMin, pxPerMin) / SLOT_MINS) * SLOT_MINS + SLOT_MINS);
+
+    // Horizontal grid lines (span full content width)
+    for (let m = visMinute; m <= visMaxMinute; m += SLOT_MINS) {
+        if (m < rangeStartMin || m > rangeEndMin) continue;
+        const gy = minToContentY(m, rangeStartMin, pxPerMin);
+        const isHour = m % 60 === 0;
+        ctx.strokeStyle = isHour ? C.gridHour : C.gridSlot;
+        ctx.lineWidth = isHour ? 1 : 0.5;
+        ctx.beginPath();
+        ctx.moveTo(TIME_LABEL_W, gy);
+        ctx.lineTo(TIME_LABEL_W + contentW, gy);
+        ctx.stroke();
+    }
+
+    // Vertical column dividers
+    bays.forEach((_id, idx) => {
+        const bx = colX(idx);
+        ctx.strokeStyle = C.labelBorder;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(bx + COL_W - 0.5, 0);
+        ctx.lineTo(bx + COL_W - 0.5, contentH);
+        ctx.stroke();
+        if (split) {
+            ctx.strokeStyle = "rgba(251,140,0,0.2)";
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(bx + COL_W / 2, 0);
+            ctx.lineTo(bx + COL_W / 2, contentH);
+            ctx.stroke();
+        }
+    });
+}
+
+// Pass 2: frozen time-label column — redraws over whatever pass 1 put there
+// Called inside translate(0, HEADER_H - scrollY), clipped to (0, HEADER_H, TIME_LABEL_W, viewH)
+function drawTimeLabelPass(
+    ctx: CanvasRenderingContext2D,
+    rangeStart: number,
+    rangeEnd: number,
+    pxPerMin: number,
+    scrollY: number,
+    viewH: number,
+    nowMin: number | null
+): void {
+    const rangeStartMin = rangeStart * 60;
+    const rangeEndMin = rangeEnd * 60;
+    const contentH = (rangeEndMin - rangeStartMin) * pxPerMin;
+
+    // Background
+    ctx.fillStyle = C.labelBg;
+    ctx.fillRect(0, 0, TIME_LABEL_W, contentH);
+
+    // Right border
+    ctx.strokeStyle = C.labelBorder;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(TIME_LABEL_W - 0.5, 0);
+    ctx.lineTo(TIME_LABEL_W - 0.5, contentH);
+    ctx.stroke();
+
+    const visMinute = Math.max(rangeStartMin, Math.floor(contentYToMin(scrollY, rangeStartMin, pxPerMin) / SLOT_MINS) * SLOT_MINS - SLOT_MINS);
+    const visMaxMinute = Math.min(rangeEndMin, Math.ceil(contentYToMin(scrollY + viewH, rangeStartMin, pxPerMin) / SLOT_MINS) * SLOT_MINS + SLOT_MINS);
+
+    for (let m = visMinute; m <= visMaxMinute; m += SLOT_MINS) {
+        if (m < rangeStartMin || m > rangeEndMin) continue;
+        const gy = minToContentY(m, rangeStartMin, pxPerMin);
+        const isHour = m % 60 === 0;
+        const isHalfHour = m % 30 === 0;
+        const isFirst = m === rangeStartMin;
+
+        ctx.textAlign = "right";
+        ctx.textBaseline = isFirst ? "top" : "bottom";
+        if (isHour) {
+            ctx.fillStyle = "#333";
+            ctx.font = "bold 10px sans-serif";
+            ctx.fillText(formatMinutes(m), TIME_LABEL_W - 4, isFirst ? gy + 1 : gy - 1);
+        } else if (isHalfHour) {
+            ctx.fillStyle = "#555";
+            ctx.font = "10px sans-serif";
+            ctx.fillText(formatMinutes(m), TIME_LABEL_W - 4, isFirst ? gy + 1 : gy - 1);
+        } else {
+            ctx.fillStyle = C.headerText;
+            ctx.font = "9px sans-serif";
+            ctx.fillText(formatMinutes(m), TIME_LABEL_W - 4, isFirst ? gy + 1 : gy - 1);
+        }
+    }
+
+    // Now pill (drawn in time-label area)
+    if (nowMin !== null && nowMin > rangeStartMin && nowMin < rangeEndMin) {
+        const gy = minToContentY(nowMin, rangeStartMin, pxPerMin);
+        const label = formatMinutes(nowMin);
+        ctx.font = "bold 9px sans-serif";
+        const lw = ctx.measureText(label).width;
+        const pw = lw + 8;
+        const ph = 13;
+        const px = TIME_LABEL_W - pw - 2;
+        const py = gy - ph / 2;
+        drawRoundedRect(ctx, px, py, pw, ph, 3);
+        ctx.fillStyle = C.nowPill;
+        ctx.fill();
+        ctx.fillStyle = "#fff";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(label, px + pw / 2, py + ph / 2);
+    }
+}
+
+// Pass 3: bay column headers — scrolled by scrollX, frozen at Y=0
+// Called inside translate(-scrollX, 0), clipped to bay area header
+function drawBayHeaderPass(
     ctx: CanvasRenderingContext2D,
     bays: string[],
     bayStatusMap: Map<string, BayStatus>,
     bayTypeMap: Map<string, string>,
-    canvasW: number,
     hasPlanActual: boolean,
-    showActualRows: boolean,
-    resourceLabel: string
+    showActualRows: boolean
 ): void {
     const split = hasPlanActual && showActualRows;
     const stripeH = split ? 5 : 0;
 
-    // Outer background
     ctx.fillStyle = C.headerBg;
-    ctx.fillRect(0, 0, canvasW, HEADER_H);
+    // Fill a wide area to cover scrolled range
+    ctx.fillRect(TIME_LABEL_W, 0, bays.length * COL_W, HEADER_H);
 
     bays.forEach((bayId, idx) => {
         const bx = colX(idx);
         const bayInfo = bayStatusMap.get(bayId);
         const bayType = bayTypeMap.get(bayId) ?? "";
 
-        // Column background
         ctx.fillStyle = idx % 2 === 0 ? C.colEven : C.colOdd;
         ctx.fillRect(bx, 0, COL_W, HEADER_H);
 
-        // Plan/actual bottom stripe
         if (split) {
             ctx.fillStyle = "#1565C0";
             ctx.fillRect(bx, HEADER_H - stripeH, COL_W / 2, stripeH);
@@ -288,7 +440,6 @@ function drawBayHeader(
             ctx.fillRect(bx + COL_W / 2, HEADER_H - stripeH, COL_W / 2, stripeH);
         }
 
-        // Truck icon — top area
         const statusColor = bayInfo ? bayStatusColor(bayInfo.color) : "";
         const occupied = bayInfo?.occupied ?? null;
         const truckColor = statusColor || (occupied === false ? "#90A4AE" : "#1565C0");
@@ -296,7 +447,6 @@ function drawBayHeader(
             drawTruckIconH(ctx, bx + COL_W / 2, 13, occupied ?? false, truckColor);
         }
 
-        // Bay name + bay type labels
         ctx.save();
         ctx.beginPath();
         ctx.rect(bx + 2, 0, COL_W - 4, HEADER_H);
@@ -306,7 +456,6 @@ function drawBayHeader(
         const bottomY = HEADER_H - stripeH - 2;
 
         if (bayType) {
-            // Two lines: name above, type below
             ctx.fillStyle = C.labelText;
             ctx.font = "bold 11px sans-serif";
             ctx.textBaseline = "bottom";
@@ -322,7 +471,6 @@ function drawBayHeader(
         }
         ctx.restore();
 
-        // Column right divider
         ctx.strokeStyle = C.labelBorder;
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -330,7 +478,6 @@ function drawBayHeader(
         ctx.lineTo(bx + COL_W - 0.5, HEADER_H);
         ctx.stroke();
 
-        // Plan/actual sub-divider in header
         if (split) {
             ctx.strokeStyle = C.gridSlot;
             ctx.lineWidth = 0.5;
@@ -340,8 +487,13 @@ function drawBayHeader(
             ctx.stroke();
         }
     });
+}
 
-    // Time label corner
+// Pass 4: corner cell — no scroll, drawn last to cover everything else in that area
+function drawCornerPass(
+    ctx: CanvasRenderingContext2D,
+    resourceLabel: string
+): void {
     ctx.fillStyle = C.labelBg;
     ctx.fillRect(0, 0, TIME_LABEL_W, HEADER_H);
     ctx.fillStyle = C.headerText;
@@ -350,150 +502,11 @@ function drawBayHeader(
     ctx.textBaseline = "middle";
     ctx.fillText(resourceLabel || "Time", TIME_LABEL_W / 2, HEADER_H / 2);
 
-    // Header bottom border
-    ctx.strokeStyle = C.headerBorder;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, HEADER_H - 0.5);
-    ctx.lineTo(canvasW, HEADER_H - 0.5);
-    ctx.stroke();
-
-    // Time-label right border
     ctx.strokeStyle = C.labelBorder;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(TIME_LABEL_W - 0.5, 0);
     ctx.lineTo(TIME_LABEL_W - 0.5, HEADER_H);
-    ctx.stroke();
-}
-
-// Draws grid + time labels in content-space coordinates (after clip + translate)
-function drawGrid(
-    ctx: CanvasRenderingContext2D,
-    bays: string[],
-    canvasW: number,
-    rangeStart: number,
-    rangeEnd: number,
-    pxPerMin: number,
-    scrollY: number,
-    viewH: number,
-    showDwell: boolean,
-    hasPlanActual: boolean,
-    showActualRows: boolean,
-    timeWindows?: TimeWindow[]
-): void {
-    const split = hasPlanActual && showActualRows;
-    const rangeStartMin = rangeStart * 60;
-    const rangeEndMin = rangeEnd * 60;
-    const contentH = (rangeEndMin - rangeStartMin) * pxPerMin;
-    const gridW = canvasW - TIME_LABEL_W - SCROLLBAR_W;
-
-    // Column backgrounds
-    bays.forEach((_id, idx) => {
-        const bx = colX(idx);
-        ctx.fillStyle = idx % 2 === 0 ? C.colEven : C.colOdd;
-        ctx.fillRect(bx, 0, COL_W, contentH);
-        if (split) {
-            // Actual right-half: subtle amber tint
-            ctx.fillStyle = "rgba(255,243,205,0.35)";
-            ctx.fillRect(bx + COL_W / 2, 0, COL_W / 2, contentH);
-        }
-    });
-
-    // Time window bands — semi-transparent tints across all bay columns
-    if (timeWindows && timeWindows.length > 0) {
-        ctx.save();
-        ctx.globalAlpha = 0.32;
-        for (const tw of timeWindows) {
-            const y1 = minToContentY(Math.max(tw.start, rangeStartMin), rangeStartMin, pxPerMin);
-            const y2 = minToContentY(Math.min(tw.end, rangeEndMin), rangeStartMin, pxPerMin);
-            if (y2 <= y1) continue;
-            ctx.fillStyle = tw.color;
-            ctx.fillRect(TIME_LABEL_W, y1, gridW, y2 - y1);
-        }
-        ctx.restore();
-    }
-
-    // Dwell shade (25-minute bands in the content area)
-    if (showDwell) {
-        ctx.fillStyle = C.dwellShade;
-        for (let m = rangeStartMin; m < rangeEndMin; m += 50) {
-            const yTop = minToContentY(m, rangeStartMin, pxPerMin);
-            const h = 25 * pxPerMin;
-            ctx.fillRect(TIME_LABEL_W, yTop, gridW, h);
-        }
-    }
-
-    // Determine visible slot range to avoid drawing 1000s of lines
-    const visMinute = Math.max(rangeStartMin, Math.floor(contentYToMin(scrollY, rangeStartMin, pxPerMin) / SLOT_MINS) * SLOT_MINS - SLOT_MINS);
-    const visMaxMinute = Math.min(rangeEndMin, Math.ceil(contentYToMin(scrollY + viewH, rangeStartMin, pxPerMin) / SLOT_MINS) * SLOT_MINS + SLOT_MINS);
-
-    // Horizontal grid lines + time labels
-    for (let m = visMinute; m <= visMaxMinute; m += SLOT_MINS) {
-        if (m < rangeStartMin || m > rangeEndMin) continue;
-        const gy = minToContentY(m, rangeStartMin, pxPerMin);
-        const isHour = m % 60 === 0;
-        const isHalfHour = m % 30 === 0;
-
-        // Grid line
-        ctx.strokeStyle = isHour ? C.gridHour : C.gridSlot;
-        ctx.lineWidth = isHour ? 1 : 0.5;
-        ctx.beginPath();
-        ctx.moveTo(0, gy);
-        ctx.lineTo(canvasW - SCROLLBAR_W, gy);
-        ctx.stroke();
-
-        // Time label — label sits just above its gridline (bottom-anchored).
-        // First slot label uses top-anchor so it stays visible at gy=0.
-        ctx.textAlign = "right";
-        const isFirst = m === rangeStartMin;
-        if (isHour) {
-            ctx.fillStyle = "#333";
-            ctx.font = "bold 10px sans-serif";
-            ctx.textBaseline = isFirst ? "top" : "bottom";
-            ctx.fillText(formatMinutes(m), TIME_LABEL_W - 4, isFirst ? gy + 1 : gy - 1);
-        } else if (isHalfHour) {
-            ctx.fillStyle = "#555";
-            ctx.font = "10px sans-serif";
-            ctx.textBaseline = isFirst ? "top" : "bottom";
-            ctx.fillText(formatMinutes(m), TIME_LABEL_W - 4, isFirst ? gy + 1 : gy - 1);
-        } else {
-            ctx.fillStyle = C.headerText;
-            ctx.font = "9px sans-serif";
-            ctx.textBaseline = isFirst ? "top" : "bottom";
-            ctx.fillText(formatMinutes(m), TIME_LABEL_W - 4, isFirst ? gy + 1 : gy - 1);
-        }
-    }
-
-    // Vertical column dividers (drawn over everything)
-    bays.forEach((_id, idx) => {
-        const bx = colX(idx);
-
-        // Right column border
-        ctx.strokeStyle = C.labelBorder;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(bx + COL_W - 0.5, 0);
-        ctx.lineTo(bx + COL_W - 0.5, contentH);
-        ctx.stroke();
-
-        // Plan/actual sub-column divider
-        if (split) {
-            ctx.strokeStyle = "rgba(251,140,0,0.2)";
-            ctx.lineWidth = 0.5;
-            ctx.beginPath();
-            ctx.moveTo(bx + COL_W / 2, 0);
-            ctx.lineTo(bx + COL_W / 2, contentH);
-            ctx.stroke();
-        }
-    });
-
-    // Time-label area right border
-    ctx.strokeStyle = C.labelBorder;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(TIME_LABEL_W - 0.5, 0);
-    ctx.lineTo(TIME_LABEL_W - 0.5, contentH);
     ctx.stroke();
 }
 
@@ -518,22 +531,17 @@ function drawVerticalBlock(
     if (visStart >= visEnd) return;
 
     const split = hasPlanActual && showActualRows;
-
-    // Column X
     const leftX = colX(bayIdx);
     let bx: number, bw: number;
     if (split) {
         bw = COL_W / 2 - 4;
-        bx = block.subRow === "actual"
-            ? leftX + COL_W / 2 + 2
-            : leftX + 2;
+        bx = block.subRow === "actual" ? leftX + COL_W / 2 + 2 : leftX + 2;
     } else {
         bx = leftX + 2;
         bw = COL_W - 4;
     }
     if (bw < 2) return;
 
-    // Y in content-space
     const byTop = minToContentY(visStart, rangeStartMin, pxPerMin) + 2;
     const byBot = minToContentY(visEnd, rangeStartMin, pxPerMin) - 2;
     const bh = byBot - byTop;
@@ -545,13 +553,11 @@ function drawVerticalBlock(
     const textColor = isPlan || isLightColor(fill) ? "#333" : "#fff";
 
     ctx.globalAlpha = isDragging ? 0.72 : 1;
-
     drawRoundedRect(ctx, bx, byTop, bw, bh, 4);
     ctx.fillStyle = fill;
     ctx.fill();
 
     if (isPlan) {
-        // Dotted outline in the original (darker) color
         ctx.save();
         ctx.setLineDash([3, 3]);
         ctx.strokeStyle = rawFill;
@@ -561,14 +567,12 @@ function drawVerticalBlock(
         ctx.restore();
     }
 
-    // Top/bottom resize handle bands
     if (bh > RESIZE_HIT * 2 + 4) {
         ctx.fillStyle = C.blockEdge;
         ctx.fillRect(bx, byTop, bw, RESIZE_HIT);
         ctx.fillRect(bx, byBot - RESIZE_HIT, bw, RESIZE_HIT);
     }
 
-    // Text — two lines if tall enough
     if (bh > 16 && bw > 12) {
         ctx.save();
         ctx.beginPath();
@@ -598,46 +602,27 @@ function drawVerticalBlock(
     ctx.globalAlpha = 1;
 }
 
-// Horizontal "now" line + left pill in content-space
-function drawNowContentLine(
+// Now line — drawn in content space (pass 1 context)
+function drawNowLine(
     ctx: CanvasRenderingContext2D,
     nowMin: number,
     rangeStart: number,
     pxPerMin: number,
-    canvasW: number
+    contentW: number
 ): void {
     const gy = minToContentY(nowMin, rangeStart * 60, pxPerMin);
-
     ctx.save();
     ctx.strokeStyle = C.nowLine;
     ctx.lineWidth = 1.5;
     ctx.setLineDash([5, 4]);
     ctx.beginPath();
     ctx.moveTo(TIME_LABEL_W, gy);
-    ctx.lineTo(canvasW - SCROLLBAR_W, gy);
+    ctx.lineTo(TIME_LABEL_W + contentW, gy);
     ctx.stroke();
     ctx.setLineDash([]);
-
-    // Pill label on left edge
-    const label = formatMinutes(nowMin);
-    ctx.font = "bold 9px sans-serif";
-    const lw = ctx.measureText(label).width;
-    const pw = lw + 8;
-    const ph = 13;
-    const px = TIME_LABEL_W - pw - 2;
-    const py = gy - ph / 2;
-
-    drawRoundedRect(ctx, px, py, pw, ph, 3);
-    ctx.fillStyle = C.nowPill;
-    ctx.fill();
-    ctx.fillStyle = "#fff";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(label, px + pw / 2, py + ph / 2);
     ctx.restore();
 }
 
-// Draw diagonal hatching over the exact overlap region of conflicting blocks
 function drawConflictHatching(
     ctx: CanvasRenderingContext2D,
     blocks: ScheduleBlock[],
@@ -649,7 +634,6 @@ function drawConflictHatching(
     hasPlanActual: boolean,
     showActualRows: boolean
 ): void {
-    // Group all blocks by bay+subRow key
     const byKey = new Map<string, ScheduleBlock[]>();
     for (const b of blocks) {
         if (!b.isConflict) continue;
@@ -666,7 +650,6 @@ function drawConflictHatching(
         const bayIdx = bayIdxMap.get(bayId) ?? -1;
         if (bayIdx < 0 || bayIdx >= bays.length) return;
 
-        // Determine X range of the sub-column
         let bx: number, bw: number;
         if (split) {
             bw = COL_W / 2;
@@ -676,7 +659,6 @@ function drawConflictHatching(
             bw = COL_W;
         }
 
-        // Find all pairwise overlaps
         grp.sort((a, b) => a.startMin - b.startMin);
         const intervals: Array<[number, number]> = [];
         for (let i = 0; i < grp.length; i++) {
@@ -689,7 +671,6 @@ function drawConflictHatching(
         }
         if (intervals.length === 0) return;
 
-        // Merge adjacent intervals
         intervals.sort((a, b) => a[0] - b[0]);
         const merged: Array<[number, number]> = [intervals[0]];
         for (let i = 1; i < intervals.length; i++) {
@@ -698,7 +679,6 @@ function drawConflictHatching(
             else merged.push(intervals[i]);
         }
 
-        // Draw hatching for each merged overlap interval
         for (const [os, oe] of merged) {
             const y1 = minToContentY(Math.max(os, rangeStartMin), rangeStartMin, pxPerMin);
             const y2 = minToContentY(Math.min(oe, rangeEndMin), rangeStartMin, pxPerMin);
@@ -709,12 +689,8 @@ function drawConflictHatching(
             ctx.beginPath();
             ctx.rect(bx, y1, bw, h);
             ctx.clip();
-
-            // Semi-transparent red tint
             ctx.fillStyle = "rgba(220, 40, 40, 0.12)";
             ctx.fillRect(bx, y1, bw, h);
-
-            // Diagonal stripes at 45°
             ctx.strokeStyle = "rgba(200, 30, 30, 0.5)";
             ctx.lineWidth = 1.2;
             const spacing = 6;
@@ -724,7 +700,6 @@ function drawConflictHatching(
                 ctx.lineTo(bx + d + h, y2);
                 ctx.stroke();
             }
-
             ctx.restore();
         }
     });
@@ -738,6 +713,8 @@ interface RenderParams {
     bayIdxMap: Map<string, number>;
     bayStatusMap: Map<string, BayStatus>;
     scrollY: number;
+    scrollX: number;
+    maxScrollX: number;
     canvasW: number;
     canvasH: number;
     pxPerMin: number;
@@ -757,45 +734,48 @@ interface RenderParams {
 
 function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
     const {
-        blocks, bays, bayIdxMap, bayStatusMap, scrollY, canvasW, canvasH,
-        pxPerMin, showDwell, drag, rangeStart, rangeEnd, nowMin, palette,
-        resourceLabel, hasPlanActual, showActualRows, bayTypeMap, colW, timeWindows
+        blocks, bays, bayIdxMap, bayStatusMap, scrollY, scrollX, maxScrollX,
+        canvasW, canvasH, pxPerMin, showDwell, drag, rangeStart, rangeEnd,
+        nowMin, palette, resourceLabel, hasPlanActual, showActualRows,
+        bayTypeMap, colW, timeWindows
     } = p;
 
-    // Update module-level COL_W so all drawing helpers use the current value
     COL_W = colW;
 
     const rangeStartMin = rangeStart * 60;
     const rangeEndMin = rangeEnd * 60;
-    const viewH = canvasH - HEADER_H;
+    const hScrollH = maxScrollX > 0 ? H_SCROLLBAR_H : 0;
+    const viewH = canvasH - HEADER_H - hScrollH;
+    const viewW = canvasW - TIME_LABEL_W - SCROLLBAR_W;
+    const contentW = bays.length * COL_W;
+    const contentH = (rangeEndMin - rangeStartMin) * pxPerMin;
 
     ctx.clearRect(0, 0, canvasW, canvasH);
     ctx.fillStyle = C.outerBg;
     ctx.fillRect(0, 0, canvasW, canvasH);
 
-    // ── Scrollable content (grid + blocks) ──────────────────────────────────────
+    // ── PASS 1: Bay content — clipped to bay area, scrolled both X and Y ───────
     ctx.save();
     ctx.beginPath();
-    ctx.rect(0, HEADER_H, canvasW - SCROLLBAR_W, viewH);
+    ctx.rect(TIME_LABEL_W, HEADER_H, viewW, viewH);
     ctx.clip();
-    ctx.translate(0, HEADER_H - scrollY);
+    // colX(i) = TIME_LABEL_W + i*COL_W → screen X = TIME_LABEL_W + i*COL_W - scrollX ✓
+    ctx.translate(-scrollX, HEADER_H - scrollY);
 
-    drawGrid(ctx, bays, canvasW, rangeStart, rangeEnd, pxPerMin, scrollY, viewH, showDwell, hasPlanActual, showActualRows, timeWindows);
+    drawBayContentPass(ctx, bays, rangeStart, rangeEnd, pxPerMin, scrollY, viewH,
+        showDwell, hasPlanActual, showActualRows, timeWindows, contentW);
 
-    // Now line (in content coords)
     const inRange = nowMin !== null && nowMin > rangeStartMin && nowMin < rangeEndMin;
     if (inRange) {
-        drawNowContentLine(ctx, nowMin!, rangeStart, pxPerMin, canvasW);
+        drawNowLine(ctx, nowMin!, rangeStart, pxPerMin, contentW);
     }
 
-    // Blocks
     for (const block of blocks) {
         if (!showActualRows && block.subRow === "actual") continue;
 
-        let bayIdx = bayIdxMap.get(block.bayId) ?? -1;
         let startMin = block.startMin;
         let endMin = block.endMin;
-        let renderBayIdx = bayIdx;
+        let renderBayIdx = bayIdxMap.get(block.bayId) ?? -1;
 
         if (drag && drag.block.item === block.item) {
             startMin = drag.currentStart;
@@ -805,44 +785,72 @@ function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
         if (renderBayIdx < 0 || renderBayIdx >= bays.length) continue;
         if (endMin <= rangeStartMin || startMin >= rangeEndMin) continue;
 
-        // Viewport culling
         const byTop = minToContentY(startMin, rangeStartMin, pxPerMin);
         const byBot = minToContentY(endMin, rangeStartMin, pxPerMin);
         if (byBot < scrollY || byTop > scrollY + viewH) continue;
 
-        drawVerticalBlock(
-            ctx, block, renderBayIdx, startMin, endMin,
+        drawVerticalBlock(ctx, block, renderBayIdx, startMin, endMin,
             rangeStart, rangeEnd, pxPerMin,
-            drag?.block.item === block.item, palette,
-            hasPlanActual, showActualRows
-        );
+            drag?.block.item === block.item, palette, hasPlanActual, showActualRows);
     }
 
-    // Conflict hatching drawn over all blocks, still in content-space
-    drawConflictHatching(
-        ctx, blocks, bayIdxMap, bays,
-        rangeStartMin, rangeEndMin, pxPerMin,
-        hasPlanActual, showActualRows
-    );
+    drawConflictHatching(ctx, blocks, bayIdxMap, bays,
+        rangeStartMin, rangeEndMin, pxPerMin, hasPlanActual, showActualRows);
 
     ctx.restore();
 
-    // ── Fixed bay header (drawn on top) ─────────────────────────────────────────
-    drawBayHeader(ctx, bays, bayStatusMap, bayTypeMap, canvasW, hasPlanActual, showActualRows, resourceLabel);
+    // ── PASS 2: Time-label column — frozen X, scrolled Y ────────────────────────
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, HEADER_H, TIME_LABEL_W, viewH);
+    ctx.clip();
+    ctx.translate(0, HEADER_H - scrollY);
+    drawTimeLabelPass(ctx, rangeStart, rangeEnd, pxPerMin, scrollY, viewH, nowMin);
+    ctx.restore();
 
-    // ── Custom scrollbar (drawn directly on canvas, not translated) ─────────────
-    const contentH = (rangeEndMin - rangeStartMin) * pxPerMin;
-    const trackH = viewH;
-    const thumbH = Math.max(24, contentH > 0 ? Math.floor((viewH / contentH) * trackH) : trackH);
-    const thumbTop = contentH > viewH
-        ? Math.floor((scrollY / (contentH - viewH)) * (trackH - thumbH))
+    // ── PASS 3: Bay column headers — scrolled X, frozen Y ────────────────────────
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(TIME_LABEL_W, 0, viewW, HEADER_H);
+    ctx.clip();
+    ctx.translate(-scrollX, 0);
+    drawBayHeaderPass(ctx, bays, bayStatusMap, bayTypeMap, hasPlanActual, showActualRows);
+    ctx.restore();
+
+    // ── PASS 4: Corner cell — no scroll ──────────────────────────────────────────
+    drawCornerPass(ctx, resourceLabel);
+
+    // ── Header bottom border ──────────────────────────────────────────────────────
+    ctx.strokeStyle = C.headerBorder;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, HEADER_H - 0.5);
+    ctx.lineTo(canvasW, HEADER_H - 0.5);
+    ctx.stroke();
+
+    // ── Vertical scrollbar ────────────────────────────────────────────────────────
+    const vThumbH = Math.max(24, contentH > 0 ? Math.floor((viewH / contentH) * viewH) : viewH);
+    const vThumbTop = contentH > viewH
+        ? Math.floor((scrollY / (contentH - viewH)) * (viewH - vThumbH))
         : 0;
-
     ctx.fillStyle = C.scrollTrack;
     ctx.fillRect(canvasW - SCROLLBAR_W, HEADER_H, SCROLLBAR_W, viewH);
     ctx.fillStyle = C.scrollThumb;
-    drawRoundedRect(ctx, canvasW - SCROLLBAR_W + 2, HEADER_H + thumbTop, SCROLLBAR_W - 4, thumbH, 3);
+    drawRoundedRect(ctx, canvasW - SCROLLBAR_W + 2, HEADER_H + vThumbTop, SCROLLBAR_W - 4, vThumbH, 3);
     ctx.fill();
+
+    // ── Horizontal scrollbar (when content wider than view) ───────────────────────
+    if (maxScrollX > 0 && contentW > 0) {
+        const hTrackW = viewW;
+        const hThumbW = Math.max(20, Math.floor((viewW / (viewW + maxScrollX)) * hTrackW));
+        const hThumbLeft = Math.floor((scrollX / maxScrollX) * (hTrackW - hThumbW));
+        ctx.fillStyle = C.scrollTrack;
+        ctx.fillRect(TIME_LABEL_W, canvasH - hScrollH, hTrackW, hScrollH);
+        ctx.fillStyle = C.scrollThumb;
+        drawRoundedRect(ctx, TIME_LABEL_W + hThumbLeft + 2, canvasH - hScrollH + 2,
+            hThumbW - 4, hScrollH - 4, 3);
+        ctx.fill();
+    }
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -853,7 +861,6 @@ export function VerticalSchedulerCanvas({
     bayStatusMap,
     bayTypeMap = new Map(),
     columnWidth = 0,
-    forceWidth,
     timeWindows,
     displayDay,
     resourceLabel,
@@ -878,21 +885,35 @@ export function VerticalSchedulerCanvas({
     const containerRef = useRef<HTMLDivElement>(null);
     const [containerW, setContainerW] = useState(800);
     const [canvasH, setCanvasH] = useState(560);
-    // When forceWidth is provided (horizontal scroll mode), override container width
-    const canvasW = forceWidth ?? containerW;
+    const canvasW = containerW;
+
     const [scrollY, setScrollY] = useState(0);
     const scrollYRef = useRef(0);
+    const [scrollX, setScrollX] = useState(0);
+    const scrollXRef = useRef(0);
+
     const dragRef = useRef<DragState | null>(null);
     const rafRef = useRef<number>(0);
     const scrollThumbDragRef = useRef<{ startY: number; startScrollY: number } | null>(null);
     const [hoverInfo, setHoverInfo] = useState<{ block: ScheduleBlock; clientX: number; clientY: number } | null>(null);
 
-    // pixels per minute (slotH is px per 5-min slot)
     const pxPerMin = Math.max(0.5, (rowHeight || 20) / SLOT_MINS);
-
     const rangeStartMin = timeRangeStart * 60;
     const rangeEndMin = timeRangeEnd * 60;
     const contentH = (rangeEndMin - rangeStartMin) * pxPerMin;
+
+    // Compute colW and maxScrollX as derived values
+    const colW = useMemo(() => {
+        if (columnWidth > 0) return columnWidth;
+        const available = containerW - TIME_LABEL_W - SCROLLBAR_W;
+        return bays.length > 0 ? Math.max(50, Math.floor(available / bays.length)) : 90;
+    }, [columnWidth, containerW, bays.length]);
+
+    const maxScrollX = useMemo(() => {
+        if (columnWidth <= 0) return 0; // auto-fit: no H scroll
+        const viewW = containerW - TIME_LABEL_W - SCROLLBAR_W;
+        return Math.max(0, bays.length * colW - viewW);
+    }, [columnWidth, containerW, bays.length, colW]);
 
     const bayIdxMap = useMemo(() => {
         const m = new Map<string, number>();
@@ -902,12 +923,22 @@ export function VerticalSchedulerCanvas({
 
     const updateScrollY = useCallback(
         (y: number) => {
-            const maxScroll = Math.max(0, contentH - (canvasH - HEADER_H));
+            const hScrollH = maxScrollX > 0 ? H_SCROLLBAR_H : 0;
+            const maxScroll = Math.max(0, contentH - (canvasH - HEADER_H - hScrollH));
             const clamped = Math.max(0, Math.min(maxScroll, y));
             scrollYRef.current = clamped;
             setScrollY(clamped);
         },
-        [contentH, canvasH]
+        [contentH, canvasH, maxScrollX]
+    );
+
+    const updateScrollX = useCallback(
+        (x: number) => {
+            const clamped = Math.max(0, Math.min(maxScrollX, x));
+            scrollXRef.current = clamped;
+            setScrollX(clamped);
+        },
+        [maxScrollX]
     );
 
     useLayoutEffect(() => {
@@ -946,17 +977,14 @@ export function VerticalSchedulerCanvas({
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
-        // Compute column width: fixed override if > 0, else auto-fit all visible bays
-        const available = canvasW - TIME_LABEL_W - SCROLLBAR_W;
-        const colW = columnWidth > 0
-            ? columnWidth
-            : bays.length > 0 ? Math.max(50, Math.floor(available / bays.length)) : 90;
         renderCanvas(ctx, {
             blocks,
             bays,
             bayIdxMap,
             bayStatusMap,
             scrollY: scrollYRef.current,
+            scrollX: scrollXRef.current,
+            maxScrollX,
             canvasW,
             canvasH,
             pxPerMin,
@@ -974,15 +1002,14 @@ export function VerticalSchedulerCanvas({
             timeWindows
         });
     }, [
-        blocks, bays, bayIdxMap, bayStatusMap, bayTypeMap, columnWidth, canvasW, canvasH,
+        blocks, bays, bayIdxMap, bayStatusMap, bayTypeMap, colW, maxScrollX, canvasW, canvasH,
         pxPerMin, showDwellMarkers, timeRangeStart, timeRangeEnd,
         palette, resourceLabel, hasPlanActual, showActualRows, computeNowMin, timeWindows
     ]);
 
-    // Redraw when drawCanvas logic changes OR when scrollY state changes
-    // (drawCanvas reads scroll from a ref so scrollY is not in its own deps)
-    useEffect(() => { drawCanvas(); }, [drawCanvas, scrollY]);
+    useEffect(() => { drawCanvas(); }, [drawCanvas, scrollY, scrollX]);
     useEffect(() => { updateScrollY(scrollYRef.current); }, [contentH, canvasH, updateScrollY]);
+    useEffect(() => { updateScrollX(scrollXRef.current); }, [maxScrollX, updateScrollX]);
 
     const drawCanvasRef = useRef(drawCanvas);
     useEffect(() => { drawCanvasRef.current = drawCanvas; });
@@ -991,27 +1018,39 @@ export function VerticalSchedulerCanvas({
         return () => clearInterval(id);
     }, []);
 
-    // Non-passive wheel listener so e.preventDefault() actually stops page scroll
+    // Non-passive wheel: handle both vertical (deltaY) and horizontal (deltaX/shift+wheel)
     const updateScrollYRef = useRef(updateScrollY);
+    const updateScrollXRef = useRef(updateScrollX);
     useEffect(() => { updateScrollYRef.current = updateScrollY; });
+    useEffect(() => { updateScrollXRef.current = updateScrollX; });
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const onWheel = (e: WheelEvent) => {
-            e.preventDefault();
-            updateScrollYRef.current(scrollYRef.current + e.deltaY);
+            const absX = Math.abs(e.deltaX);
+            const absY = Math.abs(e.deltaY);
+            if (absX > absY && maxScrollX > 0) {
+                // Horizontal scroll (trackpad left/right or shift+wheel)
+                e.preventDefault();
+                updateScrollXRef.current(scrollXRef.current + e.deltaX);
+            } else if (absY > 0) {
+                // Vertical scroll
+                e.preventDefault();
+                updateScrollYRef.current(scrollYRef.current + e.deltaY);
+            }
         };
         canvas.addEventListener("wheel", onWheel, { passive: false });
         return () => canvas.removeEventListener("wheel", onWheel);
-    }, []);
+    }, [maxScrollX]);
 
     // ─── Hit testing ──────────────────────────────────────────────────────────
 
-    // Returns bay column index (or -1) from a canvas-X position
     const hitTestCol = useCallback(
         (canvasX: number): number => {
             if (canvasX < TIME_LABEL_W) return -1;
-            const idx = Math.floor((canvasX - TIME_LABEL_W) / COL_W);
+            // Add scrollX to get content-space X
+            const contentX = canvasX + scrollXRef.current;
+            const idx = Math.floor((contentX - TIME_LABEL_W) / COL_W);
             if (idx < 0 || idx >= bays.length) return -1;
             return idx;
         },
@@ -1027,11 +1066,11 @@ export function VerticalSchedulerCanvas({
             const bayId = bays[colIdx];
             const split = hasPlanActual && showActualRows;
 
-            // Determine sub-column (plan/actual)
-            const xWithinCol = canvasX - colX(colIdx);
+            // Content-space X within column (accounting for H scroll)
+            const contentX = canvasX + scrollXRef.current;
+            const xWithinCol = contentX - colX(colIdx);
             const isActualSubCol = split && xWithinCol >= COL_W / 2;
 
-            // Content-space Y
             const contentY = canvasY - HEADER_H + scrollYRef.current;
 
             for (let i = blocks.length - 1; i >= 0; i--) {
@@ -1106,7 +1145,6 @@ export function VerticalSchedulerCanvas({
                 const hit = hitTestBlock(x, y);
                 const canvas = canvasRef.current;
                 if (canvas) {
-                    // Pointer cursor over clickable bay headers
                     const inHeader = y < HEADER_H && x >= TIME_LABEL_W;
                     canvas.style.cursor =
                         inHeader && onBayClick
@@ -1129,7 +1167,6 @@ export function VerticalSchedulerCanvas({
             const dx = x - drag.startX;
             if (Math.abs(dy) > 3 || Math.abs(dx) > 3) drag.moved = true;
             if (!drag.moved) return;
-            // Read-only blocks (from actualData) cannot be repositioned
             if (drag.readOnly) return;
 
             const deltaMin = dy / drag.pxPerMin;
@@ -1139,14 +1176,10 @@ export function VerticalSchedulerCanvas({
                 const ns = Math.max(rangeStartMin, Math.min(rangeEndMin - dur, drag.origStart + deltaMin));
                 drag.currentStart = ns;
                 drag.currentEnd = ns + dur;
-
-                // Update bay column based on X
                 const newColIdx = hitTestCol(x);
                 if (newColIdx >= 0) drag.currentBayIdx = newColIdx;
-
             } else if (drag.mode === "resize-top") {
                 drag.currentStart = Math.max(rangeStartMin, Math.min(drag.origEnd - MIN_BLOCK_MIN, drag.origStart + deltaMin));
-
             } else {
                 drag.currentEnd = Math.min(rangeEndMin, Math.max(drag.origStart + MIN_BLOCK_MIN, drag.origEnd + deltaMin));
             }
@@ -1165,13 +1198,13 @@ export function VerticalSchedulerCanvas({
 
             if (!drag) {
                 if (y <= HEADER_H && x >= TIME_LABEL_W && onBayClick) {
-                    // Bay header click
-                    const colIdx = Math.floor((x - TIME_LABEL_W) / COL_W);
+                    // Bay header click — use scrollX to find content column
+                    const contentX = x + scrollXRef.current;
+                    const colIdx = Math.floor((contentX - TIME_LABEL_W) / COL_W);
                     if (colIdx >= 0 && colIdx < bays.length) {
                         onBayClick(bays[colIdx]);
                     }
                 } else if (y > HEADER_H && x > TIME_LABEL_W) {
-                    // Empty slot click
                     const colIdx = hitTestCol(x);
                     if (colIdx >= 0) {
                         const contentY = y - HEADER_H + scrollYRef.current;
@@ -1218,10 +1251,10 @@ export function VerticalSchedulerCanvas({
         setHoverInfo(null);
     }, [drawCanvas]);
 
+    // ─── Custom vertical scrollbar (DOM overlay) ───────────────────────────────
 
-    // ─── Custom scrollbar ──────────────────────────────────────────────────────
-
-    const viewportH = canvasH - HEADER_H;
+    const hScrollH = maxScrollX > 0 ? H_SCROLLBAR_H : 0;
+    const viewportH = canvasH - HEADER_H - hScrollH;
     const thumbH = Math.max(24, contentH > 0 ? Math.floor((viewportH / contentH) * viewportH) : viewportH);
     const thumbTop = contentH > viewportH
         ? Math.floor((scrollY / (contentH - viewportH)) * (viewportH - thumbH))
@@ -1291,19 +1324,19 @@ export function VerticalSchedulerCanvas({
                 onMouseLeave={handleMouseLeave}
                 style={{ display: "block", userSelect: "none" }}
             />
-            {/* Custom scrollbar — absolutely positioned over the canvas right edge */}
+            {/* DOM vertical scrollbar */}
             <div
                 className="truck-scheduler__scrollbar"
+                style={{ height: viewportH, top: HEADER_H }}
                 onClick={handleScrollbarClick}
             >
                 <div
                     className="truck-scheduler__scrollbar-thumb"
-                    style={{ top: HEADER_H + thumbTop, height: thumbH }}
+                    style={{ top: thumbTop, height: thumbH }}
                     onMouseDown={handleThumbMouseDown}
                 />
             </div>
 
-            {/* Hover tooltip */}
             {hBlock && tooltipStyle && (
                 <div className="truck-scheduler__tooltip" style={tooltipStyle}>
                     <div className="truck-scheduler__tooltip-truck">{hBlock.truckId}</div>

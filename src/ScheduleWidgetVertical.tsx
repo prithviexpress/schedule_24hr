@@ -297,10 +297,6 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         ? bays
         : bays.slice(pageIndex * effectiveBaysPerPage, (pageIndex + 1) * effectiveBaysPerPage);
 
-    // forceWidth: when a group is selected, the canvas is sized to fit all its bays (triggers horizontal scroll)
-    const effectiveColW = (columnWidth > 0) ? columnWidth : 90;
-    const forceWidth = selectedGroup ? pagedBays.length * effectiveColW + 65 + 16 : undefined;
-
     // Parsed time window bands
     const timeWindows = useMemo(() => parseTimeWindows(timeWindowsProp ?? ""), [timeWindowsProp]);
 
@@ -418,45 +414,39 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
                 onGroupChange={g => { setSelectedGroup(g); setPageIndex(0); }}
             />
 
-            <div
-                className="truck-scheduler__canvas-wrapper"
-                style={forceWidth ? { overflowX: "auto", overflowY: "hidden" } : {}}
-            >
+            <div className="truck-scheduler__canvas-wrapper">
                 {isLoading && <div className="truck-scheduler__loading">Loading schedule…</div>}
                 {isEmpty && !isLoading && (
                     <div className="truck-scheduler__empty">
                         No schedule entries for this day. Click a bay slot to add a truck.
                     </div>
                 )}
-                <div style={forceWidth ? { width: forceWidth, height: "100%", position: "relative" } : {}}>
-                    <VerticalSchedulerCanvas
-                        blocks={blocks}
-                        bays={pagedBays}
-                        bayStatusMap={bayStatusMap}
-                        bayTypeMap={bayTypeMap}
-                        columnWidth={columnWidth}
-                        forceWidth={forceWidth}
-                        timeWindows={timeWindows}
-                        displayDay={displayDay}
-                        resourceLabel={resourceLabel || "Time"}
-                        hasPlanActual={!!planActualAttr || hasActualDs}
-                        showActualRows={effectiveShowActual}
-                        rowHeight={rowHeight ?? 20}
-                        showDwellMarkers={showDwellMarkers ?? true}
-                        defaultDwellMinutes={defaultDwellMinutes ?? 25}
-                        timeRangeStart={rangeStart}
-                        timeRangeEnd={rangeEnd}
-                        colorScheduled={colorScheduled || "#1565C0"}
-                        colorInProgress={colorInProgress || "#2E7D32"}
-                        colorDelayed={colorDelayed || "#D84315"}
-                        colorConflict={colorConflict || "#4527A0"}
-                        onTruckClick={handleTruckClick}
-                        onActualTruckClick={handleActualTruckClick}
-                        onScheduleChange={handleScheduleChange}
-                        onEmptySlotClick={handleEmptySlotClick}
-                        onBayClick={onBayClick ? handleBayClick : undefined}
-                    />
-                </div>
+                <VerticalSchedulerCanvas
+                    blocks={blocks}
+                    bays={pagedBays}
+                    bayStatusMap={bayStatusMap}
+                    bayTypeMap={bayTypeMap}
+                    columnWidth={columnWidth}
+                    timeWindows={timeWindows}
+                    displayDay={displayDay}
+                    resourceLabel={resourceLabel || "Time"}
+                    hasPlanActual={!!planActualAttr || hasActualDs}
+                    showActualRows={effectiveShowActual}
+                    rowHeight={rowHeight ?? 20}
+                    showDwellMarkers={showDwellMarkers ?? true}
+                    defaultDwellMinutes={defaultDwellMinutes ?? 25}
+                    timeRangeStart={rangeStart}
+                    timeRangeEnd={rangeEnd}
+                    colorScheduled={colorScheduled || "#1565C0"}
+                    colorInProgress={colorInProgress || "#2E7D32"}
+                    colorDelayed={colorDelayed || "#D84315"}
+                    colorConflict={colorConflict || "#4527A0"}
+                    onTruckClick={handleTruckClick}
+                    onActualTruckClick={handleActualTruckClick}
+                    onScheduleChange={handleScheduleChange}
+                    onEmptySlotClick={handleEmptySlotClick}
+                    onBayClick={onBayClick ? handleBayClick : undefined}
+                />
             </div>
         </div>
     );
