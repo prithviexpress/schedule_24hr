@@ -315,7 +315,10 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
     }, [allSortedBays, selectedGroup, bayFilter]);
 
     // Keep current page on data refresh; only reset when bay IDs actually change
-    const isAnyLoading = scheduleData.status === "loading" || (!!actualData && actualData.status === "loading");
+    const isAnyLoading =
+        scheduleData.status === "loading" ||
+        bayData?.status === "loading" ||
+        (!!actualData && actualData.status === "loading");
     const prevBaysKeyRef = useRef<string>("");
     useEffect(() => {
         if (isAnyLoading) return;
@@ -335,11 +338,13 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         ? bays
         : bays.slice(pageIndex * effectiveBaysPerPage, (pageIndex + 1) * effectiveBaysPerPage);
 
-    // Stable bay list: never pass an empty array during a reload — hold last known bays
-    // so the canvas keeps maxScrollX/maxScrollY stable and scroll position is preserved.
+    // Freeze the bay list for the entire duration of any reload so the canvas
+    // keeps maxScrollX stable and scroll position (both axes) is preserved.
     const stableBaysRef = useRef<string[]>([]);
-    if (pagedBays.length > 0) stableBaysRef.current = pagedBays;
-    const displayBays = pagedBays.length > 0 ? pagedBays : stableBaysRef.current;
+    if (!isAnyLoading && pagedBays.length > 0) stableBaysRef.current = pagedBays;
+    const displayBays = (isAnyLoading && stableBaysRef.current.length > 0)
+        ? stableBaysRef.current
+        : pagedBays;
 
     // Parsed time window bands
     const timeWindows = useMemo(() => parseTimeWindows(timeWindowsProp ?? ""), [timeWindowsProp]);
@@ -526,8 +531,12 @@ function startOfDay(d: Date): number {
 }
 
 function detectConflicts(blocks: ScheduleBlock[]): ScheduleBlock[] {
+    // Only detect conflicts within plan blocks — actual blocks pass through unchanged.
+    const planBlocks = blocks.filter(b => b.subRow !== "actual");
+    const actualBlocks = blocks.filter(b => b.subRow === "actual");
+
     const byBay = new Map<string, ScheduleBlock[]>();
-    for (const b of blocks) {
+    for (const b of planBlocks) {
         const key = b.subRow ? `${b.bayId}::${b.subRow}` : b.bayId;
         const arr = byBay.get(key);
         if (arr) arr.push({ ...b });
@@ -552,6 +561,9 @@ function detectConflicts(blocks: ScheduleBlock[]): ScheduleBlock[] {
         }
         result.push(...bayBlocks);
     });
+
+    // Actual blocks are always returned as-is — no conflict marking
+    result.push(...actualBlocks);
     return result;
 }
 
