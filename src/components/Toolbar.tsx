@@ -15,6 +15,9 @@ interface ToolbarProps {
     onPageChange: (p: number) => void;
     bayFilter: string;
     onBayFilterChange: (v: string) => void;
+    bayGroups?: string[];
+    selectedGroup?: string;
+    onGroupChange?: (g: string) => void;
 }
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -34,8 +37,12 @@ export function Toolbar({
     displayDay, onDayChange,
     colorScheduled, colorInProgress, colorDelayed, colorConflict,
     pageIndex, totalPages, totalBays, rowsPerPage, resourceLabel, onPageChange,
-    bayFilter, onBayFilterChange
+    bayFilter, onBayFilterChange,
+    bayGroups = [], selectedGroup = "", onGroupChange
 }: ToolbarProps): ReactElement {
+    const showGroupSelect = bayGroups.length > 1 && !!onGroupChange;
+    const showPagination = !selectedGroup && totalPages > 1;
+
     return (
         <div className="truck-scheduler__toolbar">
             <div className="truck-scheduler__date-nav">
@@ -49,6 +56,20 @@ export function Toolbar({
             </div>
 
             <div className="truck-scheduler__toolbar-center">
+                {showGroupSelect && (
+                    <select
+                        className="truck-scheduler__group-select"
+                        value={selectedGroup}
+                        onChange={e => onGroupChange!(e.target.value)}
+                        title="Filter by bay group"
+                    >
+                        <option value="">All groups</option>
+                        {bayGroups.map(g => (
+                            <option key={g} value={g}>{g}</option>
+                        ))}
+                    </select>
+                )}
+
                 <div className="truck-scheduler__bay-search">
                     <input
                         className="truck-scheduler__bay-search-input"
@@ -67,7 +88,7 @@ export function Toolbar({
                 </div>
             </div>
 
-            {totalPages > 1 && (
+            {showPagination && (
                 <Pagination
                     pageIndex={pageIndex}
                     totalPages={totalPages}

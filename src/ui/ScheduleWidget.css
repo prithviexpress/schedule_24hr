@@ -135,6 +135,28 @@
     color: #333;
 }
 
+/* ─── Bay group selector ─────────────────────────────────────────────────── */
+
+.truck-scheduler__group-select {
+    font-size: 12px;
+    font-family: inherit;
+    padding: 4px 8px;
+    border: 1px solid #c8c4bc;
+    border-radius: 4px;
+    background: #f5f2ed;
+    color: #333;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.15s, background 0.15s;
+    height: 28px;
+}
+
+.truck-scheduler__group-select:focus,
+.truck-scheduler__group-select:hover {
+    border-color: #888;
+    background: #e8e4de;
+}
+
 
 /* ─── Legend ─────────────────────────────────────────────────────────── */
 

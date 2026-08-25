@@ -75,6 +75,14 @@ function isLightColor(hex: string): boolean {
     return (r * 299 + g * 587 + b * 114) / 1000 > 140;
 }
 
+// ─── Time window type ─────────────────────────────────────────────────────────
+
+export interface TimeWindow {
+    start: number; // minutes from midnight
+    end: number;
+    color: string;
+}
+
 // ─── Coordinate conversions ───────────────────────────────────────────────────
 
 // minute → content-space Y (0 = start of time range)
@@ -136,6 +144,8 @@ export interface VerticalSchedulerCanvasProps {
     timeRangeStart: number;   // hour 0-23
     timeRangeEnd: number;     // hour 1-24
     columnWidth?: number;    // 0 or omit = auto-fit to container width
+    forceWidth?: number;     // when set, canvas uses this width instead of container width
+    timeWindows?: TimeWindow[];
     colorScheduled: string;
     colorInProgress: string;
     colorDelayed: string;
@@ -144,6 +154,7 @@ export interface VerticalSchedulerCanvasProps {
     onActualTruckClick?: (block: ScheduleBlock) => void;
     onScheduleChange: (block: ScheduleBlock, newStartMin: number, newEndMin: number) => void;
     onEmptySlotClick: (bayId: string, startMin: number, endMin: number, defaultDwell: number) => void;
+    onBayClick?: (bayId: string) => void;
 }
 
 // ─── Draw helpers ─────────────────────────────────────────────────────────────
@@ -368,7 +379,8 @@ function drawGrid(
     viewH: number,
     showDwell: boolean,
     hasPlanActual: boolean,
-    showActualRows: boolean
+    showActualRows: boolean,
+    timeWindows?: TimeWindow[]
 ): void {
     const split = hasPlanActual && showActualRows;
     const rangeStartMin = rangeStart * 60;
@@ -387,6 +399,20 @@ function drawGrid(
             ctx.fillRect(bx + COL_W / 2, 0, COL_W / 2, contentH);
         }
     });
+
+    // Time window bands — semi-transparent tints across all bay columns
+    if (timeWindows && timeWindows.length > 0) {
+        ctx.save();
+        ctx.globalAlpha = 0.32;
+        for (const tw of timeWindows) {
+            const y1 = minToContentY(Math.max(tw.start, rangeStartMin), rangeStartMin, pxPerMin);
+            const y2 = minToContentY(Math.min(tw.end, rangeEndMin), rangeStartMin, pxPerMin);
+            if (y2 <= y1) continue;
+            ctx.fillStyle = tw.color;
+            ctx.fillRect(TIME_LABEL_W, y1, gridW, y2 - y1);
+        }
+        ctx.restore();
+    }
 
     // Dwell shade (25-minute bands in the content area)
     if (showDwell) {
@@ -417,21 +443,25 @@ function drawGrid(
         ctx.lineTo(canvasW - SCROLLBAR_W, gy);
         ctx.stroke();
 
-        // Time label — every 5 minutes, styled by significance
+        // Time label — label sits just above its gridline (bottom-anchored).
+        // First slot label uses top-anchor so it stays visible at gy=0.
         ctx.textAlign = "right";
-        ctx.textBaseline = "top";
+        const isFirst = m === rangeStartMin;
         if (isHour) {
             ctx.fillStyle = "#333";
             ctx.font = "bold 10px sans-serif";
-            ctx.fillText(formatMinutes(m), TIME_LABEL_W - 4, gy + 1);
+            ctx.textBaseline = isFirst ? "top" : "bottom";
+            ctx.fillText(formatMinutes(m), TIME_LABEL_W - 4, isFirst ? gy + 1 : gy - 1);
         } else if (isHalfHour) {
             ctx.fillStyle = "#555";
             ctx.font = "10px sans-serif";
-            ctx.fillText(formatMinutes(m), TIME_LABEL_W - 4, gy + 1);
+            ctx.textBaseline = isFirst ? "top" : "bottom";
+            ctx.fillText(formatMinutes(m), TIME_LABEL_W - 4, isFirst ? gy + 1 : gy - 1);
         } else {
             ctx.fillStyle = C.headerText;
             ctx.font = "9px sans-serif";
-            ctx.fillText(formatMinutes(m), TIME_LABEL_W - 4, gy + 1);
+            ctx.textBaseline = isFirst ? "top" : "bottom";
+            ctx.fillText(formatMinutes(m), TIME_LABEL_W - 4, isFirst ? gy + 1 : gy - 1);
         }
     }
 
@@ -722,13 +752,14 @@ interface RenderParams {
     showActualRows: boolean;
     bayTypeMap: Map<string, string>;
     colW: number;
+    timeWindows?: TimeWindow[];
 }
 
 function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
     const {
         blocks, bays, bayIdxMap, bayStatusMap, scrollY, canvasW, canvasH,
         pxPerMin, showDwell, drag, rangeStart, rangeEnd, nowMin, palette,
-        resourceLabel, hasPlanActual, showActualRows, bayTypeMap, colW
+        resourceLabel, hasPlanActual, showActualRows, bayTypeMap, colW, timeWindows
     } = p;
 
     // Update module-level COL_W so all drawing helpers use the current value
@@ -749,7 +780,7 @@ function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
     ctx.clip();
     ctx.translate(0, HEADER_H - scrollY);
 
-    drawGrid(ctx, bays, canvasW, rangeStart, rangeEnd, pxPerMin, scrollY, viewH, showDwell, hasPlanActual, showActualRows);
+    drawGrid(ctx, bays, canvasW, rangeStart, rangeEnd, pxPerMin, scrollY, viewH, showDwell, hasPlanActual, showActualRows, timeWindows);
 
     // Now line (in content coords)
     const inRange = nowMin !== null && nowMin > rangeStartMin && nowMin < rangeEndMin;
@@ -822,6 +853,8 @@ export function VerticalSchedulerCanvas({
     bayStatusMap,
     bayTypeMap = new Map(),
     columnWidth = 0,
+    forceWidth,
+    timeWindows,
     displayDay,
     resourceLabel,
     hasPlanActual,
@@ -838,12 +871,15 @@ export function VerticalSchedulerCanvas({
     onTruckClick,
     onActualTruckClick,
     onScheduleChange,
-    onEmptySlotClick
+    onEmptySlotClick,
+    onBayClick
 }: VerticalSchedulerCanvasProps): ReactElement {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
-    const [canvasW, setCanvasW] = useState(800);
+    const [containerW, setContainerW] = useState(800);
     const [canvasH, setCanvasH] = useState(560);
+    // When forceWidth is provided (horizontal scroll mode), override container width
+    const canvasW = forceWidth ?? containerW;
     const [scrollY, setScrollY] = useState(0);
     const scrollYRef = useRef(0);
     const dragRef = useRef<DragState | null>(null);
@@ -879,7 +915,7 @@ export function VerticalSchedulerCanvas({
         if (!el) return;
         const obs = new ResizeObserver(entries => {
             const { width, height } = entries[0].contentRect;
-            setCanvasW(Math.max(TIME_LABEL_W + COL_W + SCROLLBAR_W, Math.floor(width)));
+            setContainerW(Math.max(TIME_LABEL_W + COL_W + SCROLLBAR_W, Math.floor(width)));
             setCanvasH(Math.max(120, Math.floor(height)));
         });
         obs.observe(el);
@@ -934,12 +970,13 @@ export function VerticalSchedulerCanvas({
             hasPlanActual,
             showActualRows,
             bayTypeMap,
-            colW
+            colW,
+            timeWindows
         });
     }, [
         blocks, bays, bayIdxMap, bayStatusMap, bayTypeMap, columnWidth, canvasW, canvasH,
         pxPerMin, showDwellMarkers, timeRangeStart, timeRangeEnd,
-        palette, resourceLabel, hasPlanActual, showActualRows, computeNowMin
+        palette, resourceLabel, hasPlanActual, showActualRows, computeNowMin, timeWindows
     ]);
 
     // Redraw when drawCanvas logic changes OR when scrollY state changes
@@ -1069,8 +1106,12 @@ export function VerticalSchedulerCanvas({
                 const hit = hitTestBlock(x, y);
                 const canvas = canvasRef.current;
                 if (canvas) {
+                    // Pointer cursor over clickable bay headers
+                    const inHeader = y < HEADER_H && x >= TIME_LABEL_W;
                     canvas.style.cursor =
-                        hit?.mode === "resize-top" || hit?.mode === "resize-bottom"
+                        inHeader && onBayClick
+                            ? "pointer"
+                            : hit?.mode === "resize-top" || hit?.mode === "resize-bottom"
                             ? "ns-resize"
                             : hit?.mode === "move"
                             ? "grab"
@@ -1113,7 +1154,7 @@ export function VerticalSchedulerCanvas({
             cancelAnimationFrame(rafRef.current);
             rafRef.current = requestAnimationFrame(drawCanvas);
         },
-        [canvasCoords, hitTestBlock, hitTestCol, rangeStartMin, rangeEndMin, drawCanvas]
+        [canvasCoords, hitTestBlock, hitTestCol, rangeStartMin, rangeEndMin, drawCanvas, onBayClick]
     );
 
     const handleMouseUp = useCallback(
@@ -1123,8 +1164,14 @@ export function VerticalSchedulerCanvas({
             dragRef.current = null;
 
             if (!drag) {
-                // Empty slot click
-                if (y > HEADER_H && x > TIME_LABEL_W) {
+                if (y <= HEADER_H && x >= TIME_LABEL_W && onBayClick) {
+                    // Bay header click
+                    const colIdx = Math.floor((x - TIME_LABEL_W) / COL_W);
+                    if (colIdx >= 0 && colIdx < bays.length) {
+                        onBayClick(bays[colIdx]);
+                    }
+                } else if (y > HEADER_H && x > TIME_LABEL_W) {
+                    // Empty slot click
                     const colIdx = hitTestCol(x);
                     if (colIdx >= 0) {
                         const contentY = y - HEADER_H + scrollYRef.current;
@@ -1156,7 +1203,7 @@ export function VerticalSchedulerCanvas({
         [
             canvasCoords, hitTestCol, bays, rangeStartMin, rangeEndMin,
             pxPerMin, defaultDwellMinutes, onTruckClick, onScheduleChange,
-            onEmptySlotClick, drawCanvas
+            onEmptySlotClick, drawCanvas, onBayClick
         ]
     );
 

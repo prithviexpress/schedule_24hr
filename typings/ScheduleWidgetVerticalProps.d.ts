@@ -5,6 +5,7 @@
  */
 import { CSSProperties } from "react";
 import { ActionValue, EditableValue, ListValue, ListActionValue, ListAttributeValue } from "mendix";
+
 import { Big } from "big.js";
 
 export interface ScheduleWidgetVerticalContainerProps {
@@ -42,6 +43,7 @@ export interface ScheduleWidgetVerticalContainerProps {
     onTruckClick?: ListActionValue;
     onScheduleChange?: ListActionValue;
     onEmptySlotClick?: ActionValue;
+    onBayClick?: ActionValue;
     rowHeight: number;
     columnWidth: number;
     resourceLabel: string;
@@ -59,6 +61,7 @@ export interface ScheduleWidgetVerticalContainerProps {
     colorInProgress: string;
     colorDelayed: string;
     colorConflict: string;
+    timeWindows: string;
 }
 
 export interface ScheduleWidgetVerticalPreviewProps {
@@ -102,6 +105,7 @@ export interface ScheduleWidgetVerticalPreviewProps {
     onTruckClick: {} | null;
     onScheduleChange: {} | null;
     onEmptySlotClick: {} | null;
+    onBayClick: {} | null;
     rowHeight: number | null;
     columnWidth: number;
     resourceLabel: string;
@@ -119,4 +123,5 @@ export interface ScheduleWidgetVerticalPreviewProps {
     colorInProgress: string;
     colorDelayed: string;
     colorConflict: string;
+    timeWindows: string;
 }

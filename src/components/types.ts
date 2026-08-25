@@ -39,10 +39,15 @@ export interface NewSlot {
     endISO: string;
 }
 
+export interface BayClick {
+    bayId: string;
+}
+
 // Window globals used as bridge between widget and Mendix JavaScript Actions
 declare global {
     interface Window {
         __TruckSchedulerPendingEdit?: PendingEdit;
         __TruckSchedulerNewSlot?: NewSlot;
+        __TruckSchedulerBayClick?: BayClick;
     }
 }

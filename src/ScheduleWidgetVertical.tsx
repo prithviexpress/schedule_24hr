@@ -1,10 +1,34 @@
 import React, { ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ObjectItem } from "mendix";
 import { ScheduleWidgetVerticalContainerProps } from "../typings/ScheduleWidgetVerticalProps";
-import { VerticalSchedulerCanvas } from "./components/VerticalSchedulerCanvas";
+import { VerticalSchedulerCanvas, TimeWindow } from "./components/VerticalSchedulerCanvas";
 import { Toolbar } from "./components/Toolbar";
-import { ScheduleBlock, BayStatus, PendingEdit, NewSlot } from "./components/types";
+import { ScheduleBlock, BayStatus, BayClick, PendingEdit, NewSlot } from "./components/types";
 import "./ui/ScheduleWidget.css";
+
+// Extract leading alpha prefix from bay ID — used for group dropdown
+function extractBayGroup(bayId: string): string {
+    const m = bayId.match(/^([A-Za-z]+)/);
+    return m ? m[1].toUpperCase() : "";
+}
+
+// Parse "6-9:#e3f2fd,9-12:#e8f5e9" into TimeWindow array
+function parseTimeWindows(s: string): TimeWindow[] {
+    if (!s || !s.trim()) return [];
+    return s.trim().split(",").flatMap(part => {
+        const trimmed = part.trim();
+        const colonIdx = trimmed.indexOf(":");
+        if (colonIdx < 0) return [];
+        const range = trimmed.slice(0, colonIdx).trim();
+        const color = trimmed.slice(colonIdx + 1).trim();
+        const dashIdx = range.indexOf("-");
+        if (dashIdx < 0) return [];
+        const startH = parseFloat(range.slice(0, dashIdx));
+        const endH = parseFloat(range.slice(dashIdx + 1));
+        if (isNaN(startH) || isNaN(endH) || endH <= startH) return [];
+        return [{ start: startH * 60, end: endH * 60, color }];
+    });
+}
 
 export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerProps): ReactElement {
     const {
@@ -38,6 +62,7 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         onTruckClick,
         onScheduleChange,
         onEmptySlotClick,
+        onBayClick,
         rowHeight,
         columnWidth,
         resourceLabel,
@@ -55,6 +80,7 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         colorInProgress,
         colorDelayed,
         colorConflict,
+        timeWindows: timeWindowsProp,
         name,
         class: cssClass,
         style
@@ -81,6 +107,7 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
     // Pagination (bays per page, not rows per page — same prop key reused)
     const [pageIndex, setPageIndex] = useState(0);
     const [bayFilter, setBayFilter] = useState("");
+    const [selectedGroup, setSelectedGroup] = useState("");
 
     // Resolve display day
     const displayDay: Date = useMemo(() => {
@@ -196,9 +223,16 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
     }, [bayData?.status, bayData?.items, bayIdForStatusAttr, bayTypeAttr]);
 
     // ── Derive sorted + filtered bay list ────────────────────────────────────
-    const bays = useMemo(() => {
+    const allSortedBays = useMemo(() => {
         const set = new Set<string>();
         for (const b of blocks) set.add(b.bayId);
+        // Also include bays from bayData even if they have no blocks today
+        if (bayData?.status === "available" && bayData.items && bayIdForStatusAttr) {
+            for (const item of bayData.items) {
+                const id = bayIdForStatusAttr.get(item).displayValue ?? "";
+                if (id) set.add(id);
+            }
+        }
         const arr = [...set];
         if (sortByTime) {
             const earliest = new Map<string, number>();
@@ -210,10 +244,37 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         } else {
             arr.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
         }
+        return arr;
+    }, [blocks, sortByTime, bayData?.status, bayData?.items, bayIdForStatusAttr]);
+
+    // Distinct bay groups (e.g. "AR", "WR") derived from all bay IDs
+    const bayGroups = useMemo(() => {
+        const groups = new Set<string>();
+        for (const id of allSortedBays) {
+            const g = extractBayGroup(id);
+            if (g) groups.add(g);
+        }
+        return [...groups].sort();
+    }, [allSortedBays]);
+
+    // When groups change and selectedGroup no longer exists, reset it
+    useEffect(() => {
+        if (selectedGroup && !bayGroups.includes(selectedGroup)) {
+            setSelectedGroup("");
+        }
+    }, [bayGroups, selectedGroup]);
+
+    const bays = useMemo(() => {
+        let arr = allSortedBays;
+        // Filter by selected group first
+        if (selectedGroup) {
+            arr = arr.filter(id => extractBayGroup(id) === selectedGroup);
+        }
+        // Then apply text search filter
         if (!bayFilter.trim()) return arr;
         const q = bayFilter.trim().toLowerCase();
         return arr.filter(id => id.toLowerCase().includes(q));
-    }, [blocks, sortByTime, bayFilter]);
+    }, [allSortedBays, selectedGroup, bayFilter]);
 
     // Keep current page on data refresh; only reset when bay IDs actually change
     const isAnyLoading = scheduleData.status === "loading" || (!!actualData && actualData.status === "loading");
@@ -229,10 +290,19 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         setPageIndex(prev => Math.min(prev, newTotalPages - 1));
     }, [bays, rowsPerPage, isAnyLoading]);
 
-    // Pagination
+    // Pagination — disabled when a group is selected (show all bays in group with horizontal scroll)
     const effectiveBaysPerPage = rowsPerPage > 0 ? rowsPerPage : bays.length || 1;
-    const totalPages = Math.max(1, Math.ceil(bays.length / effectiveBaysPerPage));
-    const pagedBays = bays.slice(pageIndex * effectiveBaysPerPage, (pageIndex + 1) * effectiveBaysPerPage);
+    const totalPages = selectedGroup ? 1 : Math.max(1, Math.ceil(bays.length / effectiveBaysPerPage));
+    const pagedBays = selectedGroup
+        ? bays
+        : bays.slice(pageIndex * effectiveBaysPerPage, (pageIndex + 1) * effectiveBaysPerPage);
+
+    // forceWidth: when a group is selected, the canvas is sized to fit all its bays (triggers horizontal scroll)
+    const effectiveColW = (columnWidth > 0) ? columnWidth : 90;
+    const forceWidth = selectedGroup ? pagedBays.length * effectiveColW + 65 + 16 : undefined;
+
+    // Parsed time window bands
+    const timeWindows = useMemo(() => parseTimeWindows(timeWindowsProp ?? ""), [timeWindowsProp]);
 
     // Day navigation
     const handleDayChange = useCallback(
@@ -297,6 +367,16 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         [onEmptySlotClick, displayDay]
     );
 
+    // Bay header click
+    const handleBayClick = useCallback(
+        (bayId: string) => {
+            if (!onBayClick?.canExecute) return;
+            (window as any).__TruckSchedulerBayClick = { bayId } as BayClick;
+            onBayClick.execute();
+        },
+        [onBayClick]
+    );
+
     // Time range resolution
     const resolveHour = (varProp: any, staticVal: number, min: number, max: number) => {
         if (varProp?.value != null) {
@@ -333,39 +413,50 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
                 onPageChange={setPageIndex}
                 bayFilter={bayFilter}
                 onBayFilterChange={v => { setBayFilter(v); setPageIndex(0); }}
+                bayGroups={bayGroups}
+                selectedGroup={selectedGroup}
+                onGroupChange={g => { setSelectedGroup(g); setPageIndex(0); }}
             />
 
-            <div className="truck-scheduler__canvas-wrapper">
+            <div
+                className="truck-scheduler__canvas-wrapper"
+                style={forceWidth ? { overflowX: "auto", overflowY: "hidden" } : {}}
+            >
                 {isLoading && <div className="truck-scheduler__loading">Loading schedule…</div>}
                 {isEmpty && !isLoading && (
                     <div className="truck-scheduler__empty">
                         No schedule entries for this day. Click a bay slot to add a truck.
                     </div>
                 )}
-                <VerticalSchedulerCanvas
-                    blocks={blocks}
-                    bays={pagedBays}
-                    bayStatusMap={bayStatusMap}
-                    bayTypeMap={bayTypeMap}
-                    columnWidth={columnWidth}
-                    displayDay={displayDay}
-                    resourceLabel={resourceLabel || "Time"}
-                    hasPlanActual={!!planActualAttr || hasActualDs}
-                    showActualRows={effectiveShowActual}
-                    rowHeight={rowHeight ?? 20}
-                    showDwellMarkers={showDwellMarkers ?? true}
-                    defaultDwellMinutes={defaultDwellMinutes ?? 25}
-                    timeRangeStart={rangeStart}
-                    timeRangeEnd={rangeEnd}
-                    colorScheduled={colorScheduled || "#1565C0"}
-                    colorInProgress={colorInProgress || "#2E7D32"}
-                    colorDelayed={colorDelayed || "#D84315"}
-                    colorConflict={colorConflict || "#4527A0"}
-                    onTruckClick={handleTruckClick}
-                    onActualTruckClick={handleActualTruckClick}
-                    onScheduleChange={handleScheduleChange}
-                    onEmptySlotClick={handleEmptySlotClick}
-                />
+                <div style={forceWidth ? { width: forceWidth, height: "100%", position: "relative" } : {}}>
+                    <VerticalSchedulerCanvas
+                        blocks={blocks}
+                        bays={pagedBays}
+                        bayStatusMap={bayStatusMap}
+                        bayTypeMap={bayTypeMap}
+                        columnWidth={columnWidth}
+                        forceWidth={forceWidth}
+                        timeWindows={timeWindows}
+                        displayDay={displayDay}
+                        resourceLabel={resourceLabel || "Time"}
+                        hasPlanActual={!!planActualAttr || hasActualDs}
+                        showActualRows={effectiveShowActual}
+                        rowHeight={rowHeight ?? 20}
+                        showDwellMarkers={showDwellMarkers ?? true}
+                        defaultDwellMinutes={defaultDwellMinutes ?? 25}
+                        timeRangeStart={rangeStart}
+                        timeRangeEnd={rangeEnd}
+                        colorScheduled={colorScheduled || "#1565C0"}
+                        colorInProgress={colorInProgress || "#2E7D32"}
+                        colorDelayed={colorDelayed || "#D84315"}
+                        colorConflict={colorConflict || "#4527A0"}
+                        onTruckClick={handleTruckClick}
+                        onActualTruckClick={handleActualTruckClick}
+                        onScheduleChange={handleScheduleChange}
+                        onEmptySlotClick={handleEmptySlotClick}
+                        onBayClick={onBayClick ? handleBayClick : undefined}
+                    />
+                </div>
             </div>
         </div>
     );
