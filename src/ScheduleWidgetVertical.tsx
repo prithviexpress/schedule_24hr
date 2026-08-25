@@ -157,11 +157,12 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
             const tooltipText = tooltipAttr ? (tooltipAttr.get(item).displayValue ?? "") : "";
             const tooltipText2 = tooltipAttr2 ? (tooltipAttr2.get(item).displayValue ?? "") : "";
 
-            // When actualData datasource is configured, all main blocks are "plan"
-            const subRow: "plan" | "actual" | undefined = hasActualDs
-                ? "plan"
-                : planActualAttr
-                    ? ((planActualAttr.get(item).displayValue ?? "").toLowerCase().trim().includes("actual") ? "actual" : "plan")
+            // planActualAttr wins: if configured it determines subRow per-record.
+            // hasActualDs fallback: separate actualData means all rawBlocks are "plan".
+            const subRow: "plan" | "actual" | undefined = planActualAttr
+                ? ((planActualAttr.get(item).displayValue ?? "").toLowerCase().trim().includes("actual") ? "actual" : "plan")
+                : hasActualDs
+                    ? "plan"
                     : undefined;
 
             if (!startDate || !endDate || !bayId) return [];
@@ -334,6 +335,12 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         ? bays
         : bays.slice(pageIndex * effectiveBaysPerPage, (pageIndex + 1) * effectiveBaysPerPage);
 
+    // Stable bay list: never pass an empty array during a reload — hold last known bays
+    // so the canvas keeps maxScrollX/maxScrollY stable and scroll position is preserved.
+    const stableBaysRef = useRef<string[]>([]);
+    if (pagedBays.length > 0) stableBaysRef.current = pagedBays;
+    const displayBays = pagedBays.length > 0 ? pagedBays : stableBaysRef.current;
+
     // Parsed time window bands
     const timeWindows = useMemo(() => parseTimeWindows(timeWindowsProp ?? ""), [timeWindowsProp]);
 
@@ -479,7 +486,7 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
                 )}
                 <VerticalSchedulerCanvas
                     blocks={blocks}
-                    bays={pagedBays}
+                    bays={displayBays}
                     bayStatusMap={bayStatusMap}
                     bayTypeMap={bayTypeMap}
                     columnWidth={columnWidth}
