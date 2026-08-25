@@ -371,6 +371,11 @@
                 <description>Block fill color when two trucks overlap the same bay at the same time.</description>
             </property>
 
+            <property key="gridAlpha" type="decimal" defaultValue="0.5" required="false">
+                <caption>Grid Line Opacity</caption>
+                <description>Opacity of horizontal time-slot grid lines. 0.0 = invisible, 1.0 = fully opaque. Default 0.5. Hour lines are always drawn darker than 5-minute lines regardless of this setting.</description>
+            </property>
+
             <property key="timeWindowsAlpha" type="decimal" defaultValue="0.55" required="false">
                 <caption>Time Window Opacity</caption>
                 <description>Overall opacity applied to all time window bands. 0.0 = invisible, 1.0 = fully opaque. Default 0.55. Per-band alpha can also be embedded in the color using 8-digit hex (#rrggbbaa) or rgba() — both multiply together.</description>

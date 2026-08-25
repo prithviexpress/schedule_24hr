@@ -80,6 +80,7 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         colorInProgress,
         colorDelayed,
         colorConflict,
+        gridAlpha,
         timeWindowsAlpha,
         timeWindows: timeWindowsProp,
         defaultGroup,
@@ -458,6 +459,7 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
                     columnWidth={columnWidth}
                     timeWindows={timeWindows}
                     timeWindowsAlpha={typeof timeWindowsAlpha === "number" ? timeWindowsAlpha : 0.55}
+                    gridAlpha={typeof gridAlpha === "number" ? gridAlpha : 0.5}
                     displayDay={displayDay}
                     resourceLabel={resourceLabel || "Time"}
                     hasPlanActual={!!planActualAttr || hasActualDs}

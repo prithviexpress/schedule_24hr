@@ -32,8 +32,8 @@ const C = {
     labelBg: "#f7f5f2",
     labelText: "#555",
     labelBorder: "#dddbd5",
-    gridHour: "#dddbd5",
-    gridSlot: "#f0ede8",
+    gridHour: "#a8a49e",
+    gridSlot: "#c8c4bc",
     dwellShade: "rgba(180,170,150,0.07)",
     blockEdge: "rgba(255,255,255,0.15)",
     nowLine: "rgba(229,57,53,0.7)",
@@ -140,6 +140,7 @@ export interface VerticalSchedulerCanvasProps {
     columnWidth?: number;
     timeWindows?: TimeWindow[];
     timeWindowsAlpha?: number;
+    gridAlpha?: number;
     colorScheduled: string;
     colorInProgress: string;
     colorDelayed: string;
@@ -258,6 +259,7 @@ function drawBayContentPass(
     showActualRows: boolean,
     timeWindows: TimeWindow[] | undefined,
     timeWindowsAlpha: number,
+    gridAlpha: number,
     contentW: number
 ): void {
     const split = hasPlanActual && showActualRows;
@@ -303,18 +305,22 @@ function drawBayContentPass(
     const visMinute = Math.max(rangeStartMin, Math.floor(contentYToMin(scrollY, rangeStartMin, pxPerMin) / SLOT_MINS) * SLOT_MINS - SLOT_MINS);
     const visMaxMinute = Math.min(rangeEndMin, Math.ceil(contentYToMin(scrollY + viewH, rangeStartMin, pxPerMin) / SLOT_MINS) * SLOT_MINS + SLOT_MINS);
 
-    // Horizontal grid lines (span full content width)
+    // Horizontal grid lines — opacity controlled by gridAlpha field
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, gridAlpha));
     for (let m = visMinute; m <= visMaxMinute; m += SLOT_MINS) {
         if (m < rangeStartMin || m > rangeEndMin) continue;
         const gy = minToContentY(m, rangeStartMin, pxPerMin);
         const isHour = m % 60 === 0;
+        const isHalfHour = !isHour && m % 30 === 0;
         ctx.strokeStyle = isHour ? C.gridHour : C.gridSlot;
-        ctx.lineWidth = isHour ? 1 : 0.5;
+        ctx.lineWidth = isHour ? 1.2 : isHalfHour ? 0.8 : 0.5;
         ctx.beginPath();
         ctx.moveTo(TIME_LABEL_W, gy);
         ctx.lineTo(TIME_LABEL_W + contentW, gy);
         ctx.stroke();
     }
+    ctx.restore();
 
     // Vertical column dividers
     bays.forEach((_id, idx) => {
@@ -733,6 +739,7 @@ interface RenderParams {
     colW: number;
     timeWindows?: TimeWindow[];
     timeWindowsAlpha: number;
+    gridAlpha: number;
 }
 
 function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
@@ -740,7 +747,7 @@ function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
         blocks, bays, bayIdxMap, bayStatusMap, scrollY, scrollX, maxScrollX,
         canvasW, canvasH, pxPerMin, showDwell, drag, rangeStart, rangeEnd,
         nowMin, palette, resourceLabel, hasPlanActual, showActualRows,
-        bayTypeMap, colW, timeWindows, timeWindowsAlpha
+        bayTypeMap, colW, timeWindows, timeWindowsAlpha, gridAlpha
     } = p;
 
     COL_W = colW;
@@ -766,7 +773,7 @@ function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
     ctx.translate(-scrollX, HEADER_H - scrollY);
 
     drawBayContentPass(ctx, bays, rangeStart, rangeEnd, pxPerMin, scrollY, viewH,
-        showDwell, hasPlanActual, showActualRows, timeWindows, timeWindowsAlpha, contentW);
+        showDwell, hasPlanActual, showActualRows, timeWindows, timeWindowsAlpha, gridAlpha, contentW);
 
     const inRange = nowMin !== null && nowMin > rangeStartMin && nowMin < rangeEndMin;
     if (inRange) {
@@ -866,6 +873,7 @@ export function VerticalSchedulerCanvas({
     columnWidth = 0,
     timeWindows,
     timeWindowsAlpha = 0.55,
+    gridAlpha = 0.5,
     displayDay,
     resourceLabel,
     hasPlanActual,
@@ -1004,12 +1012,13 @@ export function VerticalSchedulerCanvas({
             bayTypeMap,
             colW,
             timeWindows,
-            timeWindowsAlpha
+            timeWindowsAlpha,
+            gridAlpha
         });
     }, [
         blocks, bays, bayIdxMap, bayStatusMap, bayTypeMap, colW, maxScrollX, canvasW, canvasH,
         pxPerMin, showDwellMarkers, timeRangeStart, timeRangeEnd,
-        palette, resourceLabel, hasPlanActual, showActualRows, computeNowMin, timeWindows, timeWindowsAlpha
+        palette, resourceLabel, hasPlanActual, showActualRows, computeNowMin, timeWindows, timeWindowsAlpha, gridAlpha
     ]);
 
     useEffect(() => { drawCanvas(); }, [drawCanvas, scrollY, scrollX]);

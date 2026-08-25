@@ -61,6 +61,7 @@ export interface ScheduleWidgetVerticalContainerProps {
     colorInProgress: string;
     colorDelayed: string;
     colorConflict: string;
+    gridAlpha: number;
     timeWindowsAlpha: number;
     timeWindows: string;
     defaultGroup: string;
@@ -126,6 +127,7 @@ export interface ScheduleWidgetVerticalPreviewProps {
     colorInProgress: string;
     colorDelayed: string;
     colorConflict: string;
+    gridAlpha: number | null;
     timeWindowsAlpha: number | null;
     timeWindows: string;
     defaultGroup: string;
