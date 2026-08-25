@@ -157,6 +157,50 @@
     background: #e8e4de;
 }
 
+/* ─── Plan / Actual toggle ───────────────────────────────────────────────── */
+
+.truck-scheduler__plan-actual-toggle {
+    display: flex;
+    align-items: center;
+    border: 1px solid #c8c4bc;
+    border-radius: 5px;
+    overflow: hidden;
+    height: 28px;
+}
+
+.truck-scheduler__toggle-btn {
+    font-size: 12px;
+    font-family: inherit;
+    padding: 0 10px;
+    height: 100%;
+    background: #f5f2ed;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    white-space: nowrap;
+}
+
+.truck-scheduler__toggle-btn + .truck-scheduler__toggle-btn {
+    border-left: 1px solid #c8c4bc;
+}
+
+.truck-scheduler__toggle-btn:hover {
+    background: #e8e4de;
+    color: #333;
+}
+
+.truck-scheduler__toggle-btn--active {
+    background: #1565C0;
+    color: #fff;
+    font-weight: 600;
+}
+
+.truck-scheduler__toggle-btn--active:hover {
+    background: #1251a0;
+    color: #fff;
+}
+
 
 /* ─── Legend ─────────────────────────────────────────────────────────── */
 

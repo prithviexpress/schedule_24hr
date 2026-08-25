@@ -18,6 +18,9 @@ interface ToolbarProps {
     bayGroups?: string[];
     selectedGroup?: string;
     onGroupChange?: (g: string) => void;
+    showActualRows?: boolean;
+    hasPlanActual?: boolean;
+    onToggleActual?: (v: boolean) => void;
 }
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -38,10 +41,12 @@ export function Toolbar({
     colorScheduled, colorInProgress, colorDelayed, colorConflict,
     pageIndex, totalPages, totalBays, rowsPerPage, resourceLabel, onPageChange,
     bayFilter, onBayFilterChange,
-    bayGroups = [], selectedGroup = "", onGroupChange
+    bayGroups = [], selectedGroup = "", onGroupChange,
+    showActualRows = true, hasPlanActual = false, onToggleActual
 }: ToolbarProps): ReactElement {
     const showGroupSelect = bayGroups.length > 1 && !!onGroupChange;
     const showPagination = !selectedGroup && totalPages > 1;
+    const showPlanActualToggle = hasPlanActual && !!onToggleActual;
 
     return (
         <div className="truck-scheduler__toolbar">
@@ -86,6 +91,21 @@ export function Toolbar({
                         >×</button>
                     )}
                 </div>
+
+                {showPlanActualToggle && (
+                    <div className="truck-scheduler__plan-actual-toggle">
+                        <button
+                            className={`truck-scheduler__toggle-btn${!showActualRows ? " truck-scheduler__toggle-btn--active" : ""}`}
+                            onClick={() => onToggleActual!(false)}
+                            title="Show Plan only"
+                        >Plan</button>
+                        <button
+                            className={`truck-scheduler__toggle-btn${showActualRows ? " truck-scheduler__toggle-btn--active" : ""}`}
+                            onClick={() => onToggleActual!(true)}
+                            title="Show Plan + Actual"
+                        >Actual</button>
+                    </div>
+                )}
             </div>
 
             {showPagination && (

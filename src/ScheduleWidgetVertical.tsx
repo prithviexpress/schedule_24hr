@@ -57,7 +57,7 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         bayIdForStatusAttr,
         bayColorAttr,
         bayOccupancyAttr,
-        baySortAttr: _baySortAttr,
+        baySortAttr,
         bayTypeAttr,
         onTruckClick,
         onScheduleChange,
@@ -263,11 +263,24 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
                 if (b.startMin < cur) earliest.set(b.bayId, b.startMin);
             }
             arr.sort((a, b) => (earliest.get(a) ?? Infinity) - (earliest.get(b) ?? Infinity));
+        } else if (baySortAttr && bayData?.status === "available" && bayData.items && bayIdForStatusAttr) {
+            // Build sort-order map from bayData attribute
+            const sortMap = new Map<string, number>();
+            for (const item of bayData.items) {
+                const id = bayIdForStatusAttr.get(item).displayValue ?? "";
+                const v = baySortAttr.get(item).value;
+                if (id && v != null) sortMap.set(id, Number(v));
+            }
+            if (sortMap.size > 0) {
+                arr.sort((a, b) => (sortMap.get(a) ?? 999999) - (sortMap.get(b) ?? 999999));
+            } else {
+                arr.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+            }
         } else {
             arr.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
         }
         return arr;
-    }, [blocks, sortByTime, bayData?.status, bayData?.items, bayIdForStatusAttr]);
+    }, [blocks, sortByTime, baySortAttr, bayData?.status, bayData?.items, bayIdForStatusAttr]);
 
     // Distinct bay groups (e.g. "AR", "WR") derived from all bay IDs
     const bayGroups = useMemo(() => {
@@ -408,10 +421,20 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
     const rangeStart = resolveHour(timeRangeStartVar, timeRangeStart, 0, 23);
     const rangeEnd   = resolveHour(timeRangeEndVar, timeRangeEnd, rangeStart + 1, 24);
 
-    // showActualRowsVar wins over static
+    // Local toggle for plan/actual — initialized from variable or static prop
+    const [showActualLocal, setShowActualLocal] = useState<boolean>(() =>
+        showActualRowsVar?.value != null ? Boolean(showActualRowsVar.value) : (showActualRows ?? true)
+    );
+    const handleToggleActual = (v: boolean) => {
+        setShowActualLocal(v);
+        if (showActualRowsVar && !showActualRowsVar.readOnly) {
+            (showActualRowsVar as any).setValue(v);
+        }
+    };
+    // showActualRowsVar wins if it changes externally
     const effectiveShowActual = showActualRowsVar?.value != null
         ? Boolean(showActualRowsVar.value)
-        : (showActualRows ?? true);
+        : showActualLocal;
 
     const isLoading = scheduleData.status === "loading";
     const isEmpty = scheduleData.status === "available" && bays.length === 0;
@@ -442,6 +465,9 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
                         (defaultGroupVar as any).setValue(g);
                     }
                 }}
+                showActualRows={effectiveShowActual}
+                hasPlanActual={!!planActualAttr || hasActualDs}
+                onToggleActual={handleToggleActual}
             />
 
             <div className="truck-scheduler__canvas-wrapper">
