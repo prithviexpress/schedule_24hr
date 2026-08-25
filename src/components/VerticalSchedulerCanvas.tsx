@@ -557,7 +557,7 @@ function drawVerticalBlock(
 
     const { fill: rawFill } = blockColors(block, palette);
     const isPlan = block.subRow === "plan";
-    const fill = isPlan ? lightenColor(rawFill, 0.52) : rawFill;
+    const fill = isPlan ? lightenColor(rawFill, 0.28) : rawFill;
     const textColor = isPlan || isLightColor(fill) ? "#333" : "#fff";
 
     ctx.globalAlpha = isDragging ? 0.72 : 1;
