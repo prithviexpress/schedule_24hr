@@ -62,6 +62,7 @@ export interface ScheduleWidgetVerticalContainerProps {
     colorDelayed: string;
     colorConflict: string;
     timeWindows: string;
+    defaultGroup: string;
 }
 
 export interface ScheduleWidgetVerticalPreviewProps {
@@ -124,4 +125,5 @@ export interface ScheduleWidgetVerticalPreviewProps {
     colorDelayed: string;
     colorConflict: string;
     timeWindows: string;
+    defaultGroup: string;
 }

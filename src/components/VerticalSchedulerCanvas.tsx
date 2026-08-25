@@ -274,10 +274,9 @@ function drawBayContentPass(
         }
     });
 
-    // Time window bands
+    // Time window bands — alpha comes from the color value itself (#rrggbbaa / rgba())
     if (timeWindows && timeWindows.length > 0) {
         ctx.save();
-        ctx.globalAlpha = 0.55;
         for (const tw of timeWindows) {
             const y1 = minToContentY(Math.max(tw.start, rangeStartMin), rangeStartMin, pxPerMin);
             const y2 = minToContentY(Math.min(tw.end, rangeEndMin), rangeStartMin, pxPerMin);

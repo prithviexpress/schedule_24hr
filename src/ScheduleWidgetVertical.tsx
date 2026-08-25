@@ -81,6 +81,7 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         colorDelayed,
         colorConflict,
         timeWindows: timeWindowsProp,
+        defaultGroup,
         name,
         class: cssClass,
         style
@@ -107,7 +108,7 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
     // Pagination (bays per page, not rows per page — same prop key reused)
     const [pageIndex, setPageIndex] = useState(0);
     const [bayFilter, setBayFilter] = useState("");
-    const [selectedGroup, setSelectedGroup] = useState("");
+    const [selectedGroup, setSelectedGroup] = useState(() => defaultGroup?.trim().toUpperCase() || "");
 
     // Resolve display day
     const displayDay: Date = useMemo(() => {
@@ -257,14 +258,14 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         return [...groups].sort();
     }, [allSortedBays]);
 
-    // Reset selectedGroup only when the data is fully loaded and the group is genuinely gone.
-    // Do NOT reset while loading — bayGroups temporarily becomes [] during reload,
-    // which would clear the user's group selection on every auto-refresh.
+    // Reset selectedGroup only when fully loaded and group genuinely gone.
+    // Never reset while loading (bayGroups is temporarily [] during reload).
     useEffect(() => {
         if (selectedGroup && bayGroups.length > 0 && !bayGroups.includes(selectedGroup)) {
-            setSelectedGroup("");
+            const fallback = defaultGroup?.trim().toUpperCase() || "";
+            setSelectedGroup(bayGroups.includes(fallback) ? fallback : "");
         }
-    }, [bayGroups, selectedGroup]);
+    }, [bayGroups, selectedGroup, defaultGroup]);
 
     const bays = useMemo(() => {
         let arr = allSortedBays;
