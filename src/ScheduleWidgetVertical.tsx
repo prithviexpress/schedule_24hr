@@ -551,8 +551,12 @@ function detectConflicts(blocks: ScheduleBlock[]): ScheduleBlock[] {
         for (let i = 0; i < bayBlocks.length; i++) {
             const b = bayBlocks[i];
             if (b.startMin < maxEnd) {
-                bayBlocks[i] = { ...b, isConflict: true };
-                if (prevIdx >= 0) bayBlocks[prevIdx] = { ...bayBlocks[prevIdx], isConflict: true };
+                // Same truckId = plan/actual duplicate of the same truck — not a real conflict
+                const prev = prevIdx >= 0 ? bayBlocks[prevIdx] : null;
+                if (!prev || prev.truckId !== b.truckId) {
+                    bayBlocks[i] = { ...b, isConflict: true };
+                    if (prev) bayBlocks[prevIdx] = { ...prev, isConflict: true };
+                }
             }
             if (b.endMin > maxEnd) {
                 maxEnd = b.endMin;
