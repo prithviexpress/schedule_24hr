@@ -256,15 +256,8 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
             }
         }
         const arr = [...set];
-        if (sortByTime) {
-            const earliest = new Map<string, number>();
-            for (const b of blocks) {
-                const cur = earliest.get(b.bayId) ?? Infinity;
-                if (b.startMin < cur) earliest.set(b.bayId, b.startMin);
-            }
-            arr.sort((a, b) => (earliest.get(a) ?? Infinity) - (earliest.get(b) ?? Infinity));
-        } else if (baySortAttr && bayData?.status === "available" && bayData.items && bayIdForStatusAttr) {
-            // Build sort-order map from bayData attribute
+        // baySortAttr (explicit numeric attribute) always wins when configured
+        if (baySortAttr && bayData?.status === "available" && bayData.items && bayIdForStatusAttr) {
             const sortMap = new Map<string, number>();
             for (const item of bayData.items) {
                 const id = bayIdForStatusAttr.get(item).displayValue ?? "";
@@ -276,6 +269,13 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
             } else {
                 arr.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
             }
+        } else if (sortByTime) {
+            const earliest = new Map<string, number>();
+            for (const b of blocks) {
+                const cur = earliest.get(b.bayId) ?? Infinity;
+                if (b.startMin < cur) earliest.set(b.bayId, b.startMin);
+            }
+            arr.sort((a, b) => (earliest.get(a) ?? Infinity) - (earliest.get(b) ?? Infinity));
         } else {
             arr.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
         }
