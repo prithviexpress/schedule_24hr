@@ -277,7 +277,7 @@ function drawBayContentPass(
     // Time window bands
     if (timeWindows && timeWindows.length > 0) {
         ctx.save();
-        ctx.globalAlpha = 0.32;
+        ctx.globalAlpha = 0.55;
         for (const tw of timeWindows) {
             const y1 = minToContentY(Math.max(tw.start, rangeStartMin), rangeStartMin, pxPerMin);
             const y2 = minToContentY(Math.min(tw.end, rangeEndMin), rangeStartMin, pxPerMin);

@@ -257,9 +257,11 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         return [...groups].sort();
     }, [allSortedBays]);
 
-    // When groups change and selectedGroup no longer exists, reset it
+    // Reset selectedGroup only when the data is fully loaded and the group is genuinely gone.
+    // Do NOT reset while loading — bayGroups temporarily becomes [] during reload,
+    // which would clear the user's group selection on every auto-refresh.
     useEffect(() => {
-        if (selectedGroup && !bayGroups.includes(selectedGroup)) {
+        if (selectedGroup && bayGroups.length > 0 && !bayGroups.includes(selectedGroup)) {
             setSelectedGroup("");
         }
     }, [bayGroups, selectedGroup]);
