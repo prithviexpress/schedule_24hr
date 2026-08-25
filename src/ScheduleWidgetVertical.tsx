@@ -80,8 +80,10 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         colorInProgress,
         colorDelayed,
         colorConflict,
+        timeWindowsAlpha,
         timeWindows: timeWindowsProp,
         defaultGroup,
+        defaultGroupVar,
         name,
         class: cssClass,
         style
@@ -108,7 +110,25 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
     // Pagination (bays per page, not rows per page — same prop key reused)
     const [pageIndex, setPageIndex] = useState(0);
     const [bayFilter, setBayFilter] = useState("");
-    const [selectedGroup, setSelectedGroup] = useState(() => defaultGroup?.trim().toUpperCase() || "");
+    // Resolve initial group from variable (preferred) or static prop
+    const resolveGroup = (varVal: string | undefined, staticVal: string): string =>
+        (varVal !== undefined ? varVal : staticVal).trim().toUpperCase();
+
+    const [selectedGroup, setSelectedGroup] = useState(() =>
+        resolveGroup(defaultGroupVar?.value as string | undefined, defaultGroup || "")
+    );
+
+    // Follow external variable changes after mount (e.g. a microflow sets it)
+    const prevGroupVarRef = useRef<string | undefined>(undefined);
+    useEffect(() => {
+        const v = defaultGroupVar?.value as string | undefined;
+        if (v !== prevGroupVarRef.current) {
+            prevGroupVarRef.current = v;
+            if (v !== undefined) {
+                setSelectedGroup(v.trim().toUpperCase());
+            }
+        }
+    }, [defaultGroupVar?.value]);
 
     // Resolve display day
     const displayDay: Date = useMemo(() => {
@@ -262,10 +282,10 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
     // Never reset while loading (bayGroups is temporarily [] during reload).
     useEffect(() => {
         if (selectedGroup && bayGroups.length > 0 && !bayGroups.includes(selectedGroup)) {
-            const fallback = defaultGroup?.trim().toUpperCase() || "";
+            const fallback = resolveGroup(defaultGroupVar?.value as string | undefined, defaultGroup || "");
             setSelectedGroup(bayGroups.includes(fallback) ? fallback : "");
         }
-    }, [bayGroups, selectedGroup, defaultGroup]);
+    }, [bayGroups, selectedGroup, defaultGroup, defaultGroupVar?.value]);
 
     const bays = useMemo(() => {
         let arr = allSortedBays;
@@ -414,7 +434,13 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
                 onBayFilterChange={v => { setBayFilter(v); setPageIndex(0); }}
                 bayGroups={bayGroups}
                 selectedGroup={selectedGroup}
-                onGroupChange={g => { setSelectedGroup(g); setPageIndex(0); }}
+                onGroupChange={g => {
+                    setSelectedGroup(g);
+                    setPageIndex(0);
+                    if (defaultGroupVar && !defaultGroupVar.readOnly) {
+                        (defaultGroupVar as any).setValue(g);
+                    }
+                }}
             />
 
             <div className="truck-scheduler__canvas-wrapper">
@@ -431,6 +457,7 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
                     bayTypeMap={bayTypeMap}
                     columnWidth={columnWidth}
                     timeWindows={timeWindows}
+                    timeWindowsAlpha={typeof timeWindowsAlpha === "number" ? timeWindowsAlpha : 0.55}
                     displayDay={displayDay}
                     resourceLabel={resourceLabel || "Time"}
                     hasPlanActual={!!planActualAttr || hasActualDs}

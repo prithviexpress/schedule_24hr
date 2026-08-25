@@ -139,6 +139,7 @@ export interface VerticalSchedulerCanvasProps {
     timeRangeEnd: number;
     columnWidth?: number;
     timeWindows?: TimeWindow[];
+    timeWindowsAlpha?: number;
     colorScheduled: string;
     colorInProgress: string;
     colorDelayed: string;
@@ -256,6 +257,7 @@ function drawBayContentPass(
     hasPlanActual: boolean,
     showActualRows: boolean,
     timeWindows: TimeWindow[] | undefined,
+    timeWindowsAlpha: number,
     contentW: number
 ): void {
     const split = hasPlanActual && showActualRows;
@@ -274,9 +276,10 @@ function drawBayContentPass(
         }
     });
 
-    // Time window bands — alpha comes from the color value itself (#rrggbbaa / rgba())
+    // Time window bands — globalAlpha from the widget field, per-band alpha from the color itself
     if (timeWindows && timeWindows.length > 0) {
         ctx.save();
+        ctx.globalAlpha = Math.max(0, Math.min(1, timeWindowsAlpha));
         for (const tw of timeWindows) {
             const y1 = minToContentY(Math.max(tw.start, rangeStartMin), rangeStartMin, pxPerMin);
             const y2 = minToContentY(Math.min(tw.end, rangeEndMin), rangeStartMin, pxPerMin);
@@ -729,6 +732,7 @@ interface RenderParams {
     bayTypeMap: Map<string, string>;
     colW: number;
     timeWindows?: TimeWindow[];
+    timeWindowsAlpha: number;
 }
 
 function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
@@ -736,7 +740,7 @@ function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
         blocks, bays, bayIdxMap, bayStatusMap, scrollY, scrollX, maxScrollX,
         canvasW, canvasH, pxPerMin, showDwell, drag, rangeStart, rangeEnd,
         nowMin, palette, resourceLabel, hasPlanActual, showActualRows,
-        bayTypeMap, colW, timeWindows
+        bayTypeMap, colW, timeWindows, timeWindowsAlpha
     } = p;
 
     COL_W = colW;
@@ -762,7 +766,7 @@ function renderCanvas(ctx: CanvasRenderingContext2D, p: RenderParams): void {
     ctx.translate(-scrollX, HEADER_H - scrollY);
 
     drawBayContentPass(ctx, bays, rangeStart, rangeEnd, pxPerMin, scrollY, viewH,
-        showDwell, hasPlanActual, showActualRows, timeWindows, contentW);
+        showDwell, hasPlanActual, showActualRows, timeWindows, timeWindowsAlpha, contentW);
 
     const inRange = nowMin !== null && nowMin > rangeStartMin && nowMin < rangeEndMin;
     if (inRange) {
@@ -861,6 +865,7 @@ export function VerticalSchedulerCanvas({
     bayTypeMap = new Map(),
     columnWidth = 0,
     timeWindows,
+    timeWindowsAlpha = 0.55,
     displayDay,
     resourceLabel,
     hasPlanActual,
@@ -998,12 +1003,13 @@ export function VerticalSchedulerCanvas({
             showActualRows,
             bayTypeMap,
             colW,
-            timeWindows
+            timeWindows,
+            timeWindowsAlpha
         });
     }, [
         blocks, bays, bayIdxMap, bayStatusMap, bayTypeMap, colW, maxScrollX, canvasW, canvasH,
         pxPerMin, showDwellMarkers, timeRangeStart, timeRangeEnd,
-        palette, resourceLabel, hasPlanActual, showActualRows, computeNowMin, timeWindows
+        palette, resourceLabel, hasPlanActual, showActualRows, computeNowMin, timeWindows, timeWindowsAlpha
     ]);
 
     useEffect(() => { drawCanvas(); }, [drawCanvas, scrollY, scrollX]);
