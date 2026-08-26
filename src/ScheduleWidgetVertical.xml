@@ -262,7 +262,31 @@
 
             <property key="onEmptySlotClick" type="action" required="false">
                 <caption>On Empty Slot Click</caption>
-                <description>Action triggered when the user clicks an empty bay-time slot. window.__TruckSchedulerNewSlot is set to {bayId, startISO, endISO} before firing.</description>
+                <description>Action triggered when the user clicks an empty bay-time slot. The bay ID and times are written to the variables below before firing.</description>
+            </property>
+
+            <property key="emptySlotBayVar" type="attribute" required="false">
+                <caption>Empty Slot — Bay ID (variable)</caption>
+                <description>Page string variable that receives the clicked bay ID before On Empty Slot Click fires.</description>
+                <attributeTypes>
+                    <attributeType name="String" />
+                </attributeTypes>
+            </property>
+
+            <property key="emptySlotStartVar" type="attribute" required="false">
+                <caption>Empty Slot — Start Time (variable)</caption>
+                <description>Page DateTime variable that receives the clicked slot start time before On Empty Slot Click fires.</description>
+                <attributeTypes>
+                    <attributeType name="DateTime" />
+                </attributeTypes>
+            </property>
+
+            <property key="emptySlotEndVar" type="attribute" required="false">
+                <caption>Empty Slot — End Time (variable)</caption>
+                <description>Page DateTime variable that receives the clicked slot end time before On Empty Slot Click fires.</description>
+                <attributeTypes>
+                    <attributeType name="DateTime" />
+                </attributeTypes>
             </property>
 
             <property key="onBayClick" type="action" dataSource="bayData" required="false">

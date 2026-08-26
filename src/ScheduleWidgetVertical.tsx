@@ -62,6 +62,9 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         onTruckClick,
         onScheduleChange,
         onEmptySlotClick,
+        emptySlotBayVar,
+        emptySlotStartVar,
+        emptySlotEndVar,
         onBayClick,
         rowHeight,
         columnWidth,
@@ -402,14 +405,21 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
     const handleEmptySlotClick = useCallback(
         (bayId: string, startMin: number, endMin: number, _defaultDwell: number) => {
             const dayStart = startOfDay(displayDay);
+            const startDate = new Date(dayStart + startMin * 60000);
+            const endDate = new Date(dayStart + endMin * 60000);
+            // Write to Mendix page variables if bound
+            if (emptySlotBayVar?.status === "available") emptySlotBayVar.setValue(bayId);
+            if (emptySlotStartVar?.status === "available") emptySlotStartVar.setValue(startDate);
+            if (emptySlotEndVar?.status === "available") emptySlotEndVar.setValue(endDate);
+            // Also keep window global for backwards compatibility
             window.__TruckSchedulerNewSlot = {
                 bayId,
-                startISO: new Date(dayStart + startMin * 60000).toISOString(),
-                endISO: new Date(dayStart + endMin * 60000).toISOString()
+                startISO: startDate.toISOString(),
+                endISO: endDate.toISOString()
             } as NewSlot;
             if (onEmptySlotClick?.canExecute) onEmptySlotClick.execute();
         },
-        [onEmptySlotClick, displayDay]
+        [onEmptySlotClick, emptySlotBayVar, emptySlotStartVar, emptySlotEndVar, displayDay]
     );
 
     // Bay header click — passes the bay ObjectItem from bayData directly to the action
