@@ -265,9 +265,9 @@
                 <description>Action triggered when the user clicks an empty bay-time slot. window.__TruckSchedulerNewSlot is set to {bayId, startISO, endISO} before firing.</description>
             </property>
 
-            <property key="onBayClick" type="action" required="false">
+            <property key="onBayClick" type="action" dataSource="bayData" required="false">
                 <caption>On Bay Header Click</caption>
-                <description>Action triggered when the user clicks a bay column header (bay name or truck icon). window.__TruckSchedulerBayClick is set to {bayId} before firing.</description>
+                <description>Action triggered when the user clicks a bay column header. The clicked bay object from the Bay Data source is passed directly to the action. Requires Bay Data to be configured.</description>
             </property>
 
         </propertyGroup>

@@ -3,7 +3,7 @@ import { ObjectItem } from "mendix";
 import { ScheduleWidgetVerticalContainerProps } from "../typings/ScheduleWidgetVerticalProps";
 import { VerticalSchedulerCanvas, TimeWindow } from "./components/VerticalSchedulerCanvas";
 import { Toolbar } from "./components/Toolbar";
-import { ScheduleBlock, BayStatus, BayClick, PendingEdit, NewSlot } from "./components/types";
+import { ScheduleBlock, BayStatus, PendingEdit, NewSlot } from "./components/types";
 import "./ui/ScheduleWidget.css";
 
 // Extract leading alpha prefix from bay ID — used for group dropdown
@@ -412,14 +412,18 @@ export function ScheduleWidgetVertical(props: ScheduleWidgetVerticalContainerPro
         [onEmptySlotClick, displayDay]
     );
 
-    // Bay header click
+    // Bay header click — passes the bay ObjectItem from bayData directly to the action
     const handleBayClick = useCallback(
         (bayId: string) => {
-            if (!onBayClick?.canExecute) return;
-            (window as any).__TruckSchedulerBayClick = { bayId } as BayClick;
-            onBayClick.execute();
+            if (!onBayClick || !bayData?.items || !bayIdForStatusAttr) return;
+            const item = bayData.items.find(i =>
+                (bayIdForStatusAttr.get(i).displayValue ?? "") === bayId
+            );
+            if (!item) return;
+            const action = onBayClick.get(item);
+            if (action.canExecute) action.execute();
         },
-        [onBayClick]
+        [onBayClick, bayData?.items, bayIdForStatusAttr]
     );
 
     // Time range resolution

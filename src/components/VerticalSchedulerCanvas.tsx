@@ -15,7 +15,7 @@ const TIME_LABEL_W = 65;
 const HEADER_H = 62;
 let COL_W = 90;
 const SCROLLBAR_W = 16;
-const H_SCROLLBAR_H = 12;
+const H_SCROLLBAR_H = 14;
 const RESIZE_HIT = 6;
 const MIN_BLOCK_MIN = 5;
 const SLOT_MINS = 5;
@@ -907,6 +907,8 @@ export function VerticalSchedulerCanvas({
     const dragRef = useRef<DragState | null>(null);
     const rafRef = useRef<number>(0);
     const scrollThumbDragRef = useRef<{ startY: number; startScrollY: number } | null>(null);
+    const hScrollThumbDragRef = useRef<{ startX: number; startScrollX: number } | null>(null);
+    const panRef = useRef<{ startX: number; startY: number; startScrollX: number; startScrollY: number } | null>(null);
     const [hoverInfo, setHoverInfo] = useState<{ block: ScheduleBlock; clientX: number; clientY: number } | null>(null);
 
     const pxPerMin = Math.max(0.5, (rowHeight || 20) / SLOT_MINS);
@@ -1043,8 +1045,12 @@ export function VerticalSchedulerCanvas({
         const onWheel = (e: WheelEvent) => {
             const absX = Math.abs(e.deltaX);
             const absY = Math.abs(e.deltaY);
-            if (absX > absY && maxScrollX > 0) {
-                // Horizontal scroll (trackpad left/right or shift+wheel)
+            if (e.shiftKey && maxScrollX > 0) {
+                // Shift+wheel → horizontal scroll (desktop mouse without trackpad)
+                e.preventDefault();
+                updateScrollXRef.current(scrollXRef.current + (absY > 0 ? e.deltaY : e.deltaX));
+            } else if (absX > absY && maxScrollX > 0) {
+                // Trackpad horizontal swipe → horizontal scroll
                 e.preventDefault();
                 updateScrollXRef.current(scrollXRef.current + e.deltaX);
             } else if (absY > 0) {
@@ -1124,6 +1130,18 @@ export function VerticalSchedulerCanvas({
 
     const handleMouseDown = useCallback(
         (e: React.MouseEvent<HTMLCanvasElement>) => {
+            // Middle button: enter pan mode (scroll both axes by dragging)
+            if (e.button === 1) {
+                e.preventDefault();
+                panRef.current = {
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    startScrollX: scrollXRef.current,
+                    startScrollY: scrollYRef.current
+                };
+                if (canvasRef.current) canvasRef.current.style.cursor = "grab";
+                return;
+            }
             if (e.button !== 0) return;
             setHoverInfo(null);
             const { x, y } = canvasCoords(e);
@@ -1152,6 +1170,14 @@ export function VerticalSchedulerCanvas({
 
     const handleMouseMove = useCallback(
         (e: React.MouseEvent<HTMLCanvasElement>) => {
+            // Pan mode (middle button drag)
+            if (panRef.current) {
+                const pan = panRef.current;
+                updateScrollXRef.current(pan.startScrollX - (e.clientX - pan.startX));
+                updateScrollYRef.current(pan.startScrollY - (e.clientY - pan.startY));
+                return;
+            }
+
             const { x, y } = canvasCoords(e);
             const drag = dragRef.current;
 
@@ -1206,6 +1232,13 @@ export function VerticalSchedulerCanvas({
 
     const handleMouseUp = useCallback(
         (e: React.MouseEvent<HTMLCanvasElement>) => {
+            // End pan mode (middle button)
+            if (panRef.current) {
+                panRef.current = null;
+                if (canvasRef.current) canvasRef.current.style.cursor = "default";
+                return;
+            }
+
             const { x, y } = canvasCoords(e);
             const drag = dragRef.current;
             dragRef.current = null;
@@ -1255,6 +1288,7 @@ export function VerticalSchedulerCanvas({
     );
 
     const handleMouseLeave = useCallback(() => {
+        panRef.current = null;
         if (dragRef.current?.moved) {
             dragRef.current = null;
             drawCanvas();
@@ -1269,10 +1303,15 @@ export function VerticalSchedulerCanvas({
 
     const hScrollH = maxScrollX > 0 ? H_SCROLLBAR_H : 0;
     const viewportH = canvasH - HEADER_H - hScrollH;
+    const viewW = containerW - TIME_LABEL_W - SCROLLBAR_W;
     const thumbH = Math.max(24, contentH > 0 ? Math.floor((viewportH / contentH) * viewportH) : viewportH);
     const thumbTop = contentH > viewportH
         ? Math.floor((scrollY / (contentH - viewportH)) * (viewportH - thumbH))
         : 0;
+
+    // H scrollbar geometry
+    const hThumbW = maxScrollX > 0 ? Math.max(20, Math.floor((viewW / (viewW + maxScrollX)) * viewW)) : viewW;
+    const hThumbLeft = maxScrollX > 0 ? Math.floor((scrollX / maxScrollX) * (viewW - hThumbW)) : 0;
 
     const handleScrollbarClick = useCallback(
         (e: React.MouseEvent<HTMLDivElement>) => {
@@ -1304,6 +1343,41 @@ export function VerticalSchedulerCanvas({
             window.addEventListener("mouseup", onUp);
         },
         [contentH, viewportH, thumbH, updateScrollY]
+    );
+
+    // ─── Custom horizontal scrollbar (DOM overlay) ────────────────────────────
+
+    const handleHScrollbarClick = useCallback(
+        (e: React.MouseEvent<HTMLDivElement>) => {
+            e.stopPropagation();
+            const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const ratio = Math.max(0, Math.min(1, clickX / (viewW - hThumbW)));
+            updateScrollX(ratio * maxScrollX);
+        },
+        [viewW, hThumbW, maxScrollX, updateScrollX]
+    );
+
+    const handleHThumbMouseDown = useCallback(
+        (e: React.MouseEvent) => {
+            e.stopPropagation();
+            hScrollThumbDragRef.current = { startX: e.clientX, startScrollX: scrollXRef.current };
+            const onMove = (mv: MouseEvent) => {
+                const td = hScrollThumbDragRef.current;
+                if (!td) return;
+                const dx = mv.clientX - td.startX;
+                const scale = viewW > hThumbW ? maxScrollX / (viewW - hThumbW) : 1;
+                updateScrollXRef.current(td.startScrollX + dx * scale);
+            };
+            const onUp = () => {
+                hScrollThumbDragRef.current = null;
+                window.removeEventListener("mousemove", onMove);
+                window.removeEventListener("mouseup", onUp);
+            };
+            window.addEventListener("mousemove", onMove);
+            window.addEventListener("mouseup", onUp);
+        },
+        [viewW, hThumbW, maxScrollX]
     );
 
     // ─── Tooltip ───────────────────────────────────────────────────────────────
@@ -1350,6 +1424,21 @@ export function VerticalSchedulerCanvas({
                     onMouseDown={handleThumbMouseDown}
                 />
             </div>
+
+            {/* DOM horizontal scrollbar */}
+            {maxScrollX > 0 && (
+                <div
+                    className="truck-scheduler__h-scrollbar"
+                    style={{ left: TIME_LABEL_W, width: viewW, height: H_SCROLLBAR_H }}
+                    onClick={handleHScrollbarClick}
+                >
+                    <div
+                        className="truck-scheduler__h-scrollbar-thumb"
+                        style={{ left: hThumbLeft, width: hThumbW }}
+                        onMouseDown={handleHThumbMouseDown}
+                    />
+                </div>
+            )}
 
             {hBlock && tooltipStyle && (
                 <div className="truck-scheduler__tooltip" style={tooltipStyle}>

@@ -444,3 +444,31 @@
     background: #e8e4de;
     margin: 4px 0;
 }
+
+/* ─── Horizontal scrollbar (DOM overlay) ────────────────────────────── */
+
+.truck-scheduler__h-scrollbar {
+    position: absolute;
+    bottom: 0;
+    background: #e8e4de;
+    border-top: 1px solid #d8d5cf;
+    cursor: pointer;
+    user-select: none;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.truck-scheduler__h-scrollbar-thumb {
+    position: absolute;
+    top: 2px;
+    height: 10px;
+    background: #bbb8b2;
+    border-radius: 5px;
+    transition: background 0.15s;
+    cursor: grab;
+}
+
+.truck-scheduler__h-scrollbar-thumb:hover,
+.truck-scheduler__h-scrollbar-thumb--active {
+    background: #888580;
+}

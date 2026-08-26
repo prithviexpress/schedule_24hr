@@ -43,7 +43,7 @@ export interface ScheduleWidgetVerticalContainerProps {
     onTruckClick?: ListActionValue;
     onScheduleChange?: ListActionValue;
     onEmptySlotClick?: ActionValue;
-    onBayClick?: ActionValue;
+    onBayClick?: ListActionValue;
     rowHeight: number;
     columnWidth: number;
     resourceLabel: string;
