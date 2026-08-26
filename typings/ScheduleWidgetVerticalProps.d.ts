@@ -43,9 +43,6 @@ export interface ScheduleWidgetVerticalContainerProps {
     onTruckClick?: ListActionValue;
     onScheduleChange?: ListActionValue;
     onEmptySlotClick?: ActionValue;
-    emptySlotBayVar?: EditableValue<string>;
-    emptySlotStartVar?: EditableValue<Date>;
-    emptySlotEndVar?: EditableValue<Date>;
     onBayClick?: ListActionValue;
     rowHeight: number;
     columnWidth: number;
@@ -112,9 +109,6 @@ export interface ScheduleWidgetVerticalPreviewProps {
     onTruckClick: {} | null;
     onScheduleChange: {} | null;
     onEmptySlotClick: {} | null;
-    emptySlotBayVar: string;
-    emptySlotStartVar: string;
-    emptySlotEndVar: string;
     onBayClick: {} | null;
     rowHeight: number | null;
     columnWidth: number;
